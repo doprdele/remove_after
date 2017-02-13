@@ -9,7 +9,7 @@ if [[ $TOKEN ]]; then
 elif [[ $GCP ]]; then
   VMNAME=$(curl -H Metadata-Flavor:Google http://metadata/computeMetadata/v1/instance/hostname | cut -d. -f1)
   ZONE=$(curl -H Metadata-Flavor:Google http://metadata/computeMetadata/v1/instance/zone | cut -d/ -f4)
-  /usr/bin/gcloud compute instances delete $VMNAME --zone $ZONE --quiet
+  /root/google-cloud-sdk/bin/gcloud compute instances delete $VMNAME --zone $ZONE --quiet
 else
   echo "..unsupported cloud provider..."
 fi

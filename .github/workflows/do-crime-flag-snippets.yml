@@ -1,0 +1,105 @@
+name: do-crime-flag-snippets
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-bank-corrected-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-flag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yt-dlp and FFmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Download original protest footage at maximum resolution
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p flag_replacements/{raw,clips,qc}
+          URL='https://twitter.com/ScooterCasterNY/status/1931915983150871022'
+          yt-dlp --no-playlist --force-ipv4 --retries 10 --fragment-retries 10 \
+            --socket-timeout 45 --impersonate chrome --write-info-json \
+            -f 'bestvideo[height>=1080]+bestaudio/bestvideo+bestaudio/best' \
+            --merge-output-format mp4 -o 'flag_replacements/raw/american_flag_burning.%(ext)s' "$URL"
+          src=$(find flag_replacements/raw -maxdepth 1 -type f -name 'american_flag_burning.*' ! -name '*.info.json' ! -name '*.part' | head -n1)
+          test -s "$src"
+          mv "$src" flag_replacements/raw/american_flag_burning.mp4
+
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          p='flag_replacements/raw/american_flag_burning.mp4'
+          d=json.loads(subprocess.check_output([
+              'ffprobe','-v','error','-select_streams','v:0',
+              '-show_entries','stream=width,height,r_frame_rate:format=duration,size',
+              '-of','json',p
+          ]))
+          s=d['streams'][0]
+          assert max(int(s['width']), int(s['height'])) >= 1920, d
+          Path('flag_replacements/qc/source_ffprobe.json').write_text(json.dumps(d,indent=2))
+          print(json.dumps(d,indent=2))
+          PY
+
+          ffmpeg -y -hide_banner -loglevel error -i flag_replacements/raw/american_flag_burning.mp4 \
+            -vf "fps=1/2,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=7:y=7:fontsize=17:fontcolor=white:borderw=2:bordercolor=black,tile=6x10:padding=3:margin=3:color=black" \
+            -frames:v 1 -q:v 2 flag_replacements/qc/source_contact.jpg
+
+      - name: Render two clean vertical flag shots
+        shell: bash
+        run: |
+          set -euxo pipefail
+          src=flag_replacements/raw/american_flag_burning.mp4
+
+          make_flag() {
+            local start="$1" output="$2" phase="$3"
+            ffmpeg -y -hide_banner -loglevel warning -ss "$start" -i "$src" \
+              -an -filter_complex "[0:v]scale=-2:2160:flags=lanczos,crop=1216:2160:x='(iw-1216)/2+18*sin(25*t+${phase})':y=0,scale=1140:2027:flags=lanczos,crop=1080:1920:x='30+15*sin(31*t+${phase})':y='53+13*cos(27*t+${phase})',setpts=(PTS-STARTPTS)/1.12,fps=60,eq=contrast=1.28:saturation=1.48:brightness=-0.025,rgbashift=rh=9:bh=-9:rv=2:bv=-2,noise=alls=8:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@0.22,unsharp=5:5:0.72:5:5:0,trim=duration=1.5,setpts=PTS-STARTPTS,format=yuv420p[v]" \
+              -map '[v]' -frames:v 90 -r 60 -c:v libx264 -preset medium -crf 15 \
+              -profile:v high -level:v 4.2 -g 60 -keyint_min 60 -sc_threshold 0 \
+              -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+              -movflags +faststart "$output"
+          }
+
+          # Two different moments where the U.S. flag and surrounding demonstrators
+          # are simultaneously visible. The central 9:16 crop excludes corner bugs.
+          make_flag 16.0 flag_replacements/clips/american_flag_burning_1.mp4 0
+          make_flag 56.0 flag_replacements/clips/american_flag_burning_2.mp4 2
+
+          for p in flag_replacements/clips/*.mp4; do
+            ffprobe -v error -count_frames -show_entries \
+              format=filename,duration,size:stream=codec_name,width,height,r_frame_rate,nb_read_frames \
+              -of json "$p" > "flag_replacements/qc/$(basename "$p").ffprobe.json"
+            ffmpeg -v error -i "$p" -f null -
+          done
+
+          ffmpeg -y -hide_banner -loglevel error \
+            -i flag_replacements/clips/american_flag_burning_1.mp4 \
+            -i flag_replacements/clips/american_flag_burning_2.mp4 \
+            -filter_complex "[0:v]select='eq(n,36)',scale=540:960[a];[1:v]select='eq(n,36)',scale=540:960[b];[a][b]hstack=inputs=2" \
+            -frames:v 1 -q:v 2 flag_replacements/qc/flag_replacement_board.jpg
+
+          rm -f flag_replacements/raw/american_flag_burning.mp4
+
+      - name: Upload flag replacements
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-american-flag-replacements
+          path: flag_replacements/
+          compression-level: 6
+          retention-days: 2
+          if-no-files-found: error

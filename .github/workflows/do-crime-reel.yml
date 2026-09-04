@@ -71,8 +71,10 @@ jobs:
           s=s.replace("zip([7,8,9,10],[0,20,40,54])","zip([7,8,9,10],[0,17,34,48])")
           s=s.replace('-i work/src/flag.mp4 -ss 44.742 -i work/audio/raya_master.m4a','-i work/src/flag.mp4 -i work/audio/raya_master.m4a')
           s=s.replace('# 55 eighth-note slots at 110 BPM','# 49 eighth-note slots at 98 BPM')
+          s=s.replace('d=.012','d=0.012').replace('d=.07','d=0.07')
           p.write_text(s)
           assert 'S=15/49; N=49' in s
+          assert 'd=0.012' in s and 'd=0.07' in s
           PY
 
       - name: Render reel

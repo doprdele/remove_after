@@ -24,7 +24,11 @@ jobs:
           yt-dlp --version
           ffmpeg -version | head -n 2
       - name: Render reel
-        run: bash chatgpt_do_crime/do_crime_render.sh
+        shell: bash
+        run: |
+          mkdir -p work/qc output
+          set -o pipefail
+          bash chatgpt_do_crime/do_crime_render.sh 2>&1 | tee work/qc/build.log
       - name: Upload output and QC
         if: always()
         uses: actions/upload-artifact@v4

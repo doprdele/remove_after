@@ -23,8 +23,11 @@ jobs:
           python -m pip install --upgrade "yt-dlp[default]" pillow
           yt-dlp --version
           ffmpeg -version | head -n 2
-      - name: Apply non-Runway media patch
-        run: python chatgpt_do_crime/patch_no_runway.py
+      - name: Force sourced-only public embed endpoints
+        shell: bash
+        run: |
+          sed -i 's#https://vimeo.com/#https://player.vimeo.com/video/#g' chatgpt_do_crime/do_crime_render.sh
+          ! grep -q 'dnznrvs05pmza.cloudfront.net' chatgpt_do_crime/do_crime_render.sh
       - name: Render reel
         shell: bash
         run: |

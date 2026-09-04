@@ -1,0 +1,43 @@
+name: do-crime-alt-hd-probe
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-alt-hd-probe-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yt-dlp and FFmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq curl fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Probe alternate HD sources
+        shell: bash
+        run: |
+          chmod +x chatgpt_do_crime/probe_alt_hd_sources.sh
+          chatgpt_do_crime/probe_alt_hd_sources.sh
+
+      - name: Upload visual review bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-alt-hd-probe
+          path: probe/
+          compression-level: 6
+          retention-days: 2
+          if-no-files-found: warn

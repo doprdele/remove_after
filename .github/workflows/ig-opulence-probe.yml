@@ -1,0 +1,106 @@
+name: ig-opulence-probe
+
+on:
+  push:
+    branches: [chatgpt-do-crime-fastbeat-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+          yt-dlp --version
+      - name: Download and inspect supplied reel
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p out/raw out/contact out/meta out/frames
+          URL='https://www.instagram.com/reel/DbsgjHEtQWO/'
+          ok=0
+          for args in \
+            '--impersonate chrome' \
+            '--impersonate safari' \
+            ''; do
+            rm -f out/raw/opulence.* 2>/dev/null || true
+            # shellcheck disable=SC2086
+            if yt-dlp --no-playlist --retries 6 --fragment-retries 6 --socket-timeout 45 $args \
+                --write-info-json -f 'bestvideo+bestaudio/best' --merge-output-format mp4 \
+                -o 'out/raw/opulence.%(ext)s' "$URL" >out/meta/yt_dlp_stdout.txt 2>out/meta/yt_dlp_stderr.txt; then
+              ok=1; break
+            fi
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+            curl -LfsS --compressed -A "$ua" "$URL" -o out/meta/page.html 2>out/meta/page.err || true
+            curl -LfsS --compressed -A "$ua" "${URL}embed/" -o out/meta/embed.html 2>out/meta/embed.err || true
+            python - <<'PY'
+import html,re
+from pathlib import Path
+found=[]
+for p in [Path('out/meta/page.html'),Path('out/meta/embed.html')]:
+    if not p.exists(): continue
+    s=html.unescape(p.read_text(errors='replace')).replace('\\u0026','&').replace('\\/','/')
+    pats=[r'<meta[^>]+property=["\']og:video(?::secure_url)?["\'][^>]+content=["\']([^"\']+)',r'"video_url"\s*:\s*"([^"]+)',r'"contentUrl"\s*:\s*"([^"]+)']
+    for pat in pats:
+        found += re.findall(pat,s,re.I)
+Path('out/meta/extracted_urls.txt').write_text('\n'.join(dict.fromkeys(found)))
+PY
+            direct=$(head -n1 out/meta/extracted_urls.txt 2>/dev/null || true)
+            if [ -n "$direct" ]; then
+              curl -LfsS --retry 5 --retry-delay 2 -A "$ua" -e "$URL" "$direct" -o out/raw/opulence.mp4 && ok=1 || true
+            fi
+          fi
+
+          if [ "$ok" -ne 1 ]; then
+            echo 'FAILED_TO_FETCH_REEL' > out/meta/status.txt
+            find out -type f -printf '%P\t%s bytes\n' | sort > out/meta/manifest.txt
+            exit 1
+          fi
+
+          src=$(find out/raw -maxdepth 1 -type f -name 'opulence.*' ! -name '*.part' ! -name '*.info.json' | head -n1)
+          test -s "$src"
+          [ "$src" = out/raw/opulence.mp4 ] || ffmpeg -y -v error -i "$src" -c copy out/raw/opulence.mp4
+          ffprobe -v error -show_entries format=duration,size,bit_rate:stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate -of json out/raw/opulence.mp4 > out/meta/ffprobe.json
+
+          duration=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 out/raw/opulence.mp4)
+          pages=$(python - "$duration" <<'PY'
+import math,sys
+print(max(1,math.ceil(float(sys.argv[1])/18)))
+PY
+          )
+          for ((i=0;i<pages;i++)); do
+            start=$((i*18))
+            ffmpeg -y -hide_banner -loglevel error -ss "$start" -t 18 -i out/raw/opulence.mp4 \
+              -vf "fps=1,scale=240:426:force_original_aspect_ratio=decrease,pad=240:426:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=5:y=5:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=6x3:padding=3:margin=3:color=black" \
+              -frames:v 1 -q:v 2 "out/contact/portrait_page_${i}.jpg" || true
+          done
+          for t in 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28; do
+            python - "$duration" "$t" <<'PY'
+import sys
+raise SystemExit(0 if float(sys.argv[2])<float(sys.argv[1]) else 1)
+PY
+            [ $? -eq 0 ] || continue
+            ffmpeg -y -v error -ss "$t" -i out/raw/opulence.mp4 -frames:v 1 -q:v 1 "out/frames/frame_${t}.jpg" || true
+          done
+          echo OK > out/meta/status.txt
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/meta/manifest.txt
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ig-opulence-probe
+          path: out/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn

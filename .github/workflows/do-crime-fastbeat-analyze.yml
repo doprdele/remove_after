@@ -1,0 +1,121 @@
+name: do-crime-fastbeat-analyze
+
+on:
+  push:
+    branches: [chatgpt-do-crime-fastbeat-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install audio tools
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl >/dev/null
+      - name: Fetch and analyze the full 30-second preview
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          curl -LfsS --retry 6 --retry-delay 2 \
+            'https://itunes.apple.com/search?term=Raya%20Slowed%20Zericxxn&entity=song&limit=25' \
+            -o out/itunes.json
+          preview=$(jq -r '.results[] | select((.artistName|ascii_downcase)=="zericxxn" and (.trackName|ascii_downcase)=="raya (slowed)") | .previewUrl' out/itunes.json | head -n1)
+          test -n "$preview"; test "$preview" != null
+          curl -LfsS --retry 6 --retry-delay 2 "$preview" -o out/raya_preview.m4a
+          ffmpeg -y -v error -i out/raya_preview.m4a -ac 1 -ar 8000 -c:a pcm_s16le out/raya_preview.wav
+
+          python - <<'PY'
+          import json, math, statistics, struct, wave
+          from pathlib import Path
+
+          p='out/raya_preview.wav'
+          with wave.open(p,'rb') as w:
+              sr=w.getframerate(); n=w.getnframes(); raw=w.readframes(n)
+          samples=struct.unpack('<'+'h'*(len(raw)//2),raw)
+          hop=int(sr*0.01); frame=int(sr*0.025)
+          env=[]
+          for pos in range(0,len(samples)-frame,hop):
+              x=samples[pos:pos+frame]
+              rms=math.sqrt(sum(v*v for v in x)/len(x))/32768.0
+              diff=sum(abs(x[j]-x[j-1]) for j in range(1,len(x)))/(len(x)-1)/65536.0
+              env.append(0.42*rms+0.58*diff)
+          onset=[]
+          for i,v in enumerate(env):
+              hist=env[max(0,i-24):i]
+              base=statistics.median(hist) if hist else v
+              onset.append(max(0.0,v-base))
+          med=statistics.median(onset)
+          mad=statistics.median([abs(x-med) for x in onset]) or 1e-9
+          threshold=med+2.4*mad
+          duration=len(samples)/sr
+          window=15.0
+          def window_stats(start):
+              a=max(0,int(start/0.01)); b=min(len(onset),int((start+window)/0.01))
+              z=onset[a:b]
+              peaks=[]
+              for k in range(1,len(z)-1):
+                  if z[k]>threshold and z[k]>=z[k-1] and z[k]>z[k+1]: peaks.append(k)
+              # Remove double detections closer than 70 ms.
+              compact=[]
+              for k in peaks:
+                  if not compact or k-compact[-1]>=7: compact.append(k)
+                  elif z[k]>z[compact[-1]]: compact[-1]=k
+              strength=sum(sorted(z,reverse=True)[:max(1,len(z)//15)])
+              score=len(compact)*1.8+strength*55.0
+              return {'start':round(start,3),'end':round(start+window,3),'score':score,'onset_count':len(compact),'onsets':[round(start+k*0.01,3) for k in compact]}
+          candidates=[]
+          start=0.0
+          while start<=duration-window+1e-6:
+              candidates.append(window_stats(start)); start+=0.25
+          candidates.sort(key=lambda x:x['score'],reverse=True)
+          first=window_stats(0.0)
+          best=candidates[0]
+          # Prefer a distinctly later window when it is near the maximum and denser than the original.
+          later=[c for c in candidates if c['start']>=7.0 and c['score']>=best['score']*0.92 and c['onset_count']>=first['onset_count']+2]
+          chosen=later[0] if later else best
+
+          # Estimate a useful pulse grid from onset spacings in the chosen window.
+          oo=chosen['onsets']
+          intervals=[]
+          for i,a in enumerate(oo):
+              for b in oo[i+1:i+8]:
+                  d=b-a
+                  if 0.24<=d<=0.85: intervals.append(d)
+          bins={}
+          for d in intervals:
+              q=round(d/0.01)*0.01
+              bins[q]=bins.get(q,0)+1
+          pulse=max(bins,key=bins.get) if bins else 0.306
+          while pulse>0.42: pulse/=2
+          while pulse<0.24: pulse*=2
+          bpm=60/pulse
+          report={'duration':duration,'first_15':first,'chosen':chosen,'estimated_pulse_seconds':pulse,'estimated_subdivision_bpm':bpm,'top_candidates':candidates[:12]}
+          Path('out/analysis.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+
+          start=$(jq -r '.chosen.start' out/analysis.json)
+          ffmpeg -y -v error -ss 0 -i out/raya_preview.m4a -t 15 -c:a aac -b:a 256k out/current_first15.m4a
+          ffmpeg -y -v error -ss "$start" -i out/raya_preview.m4a -t 15 -c:a aac -b:a 256k out/chosen_fast15.m4a
+          ffmpeg -y -v error -i out/raya_preview.m4a -filter_complex \
+            "showwavespic=s=1800x500:split_channels=1:colors=white,drawbox=x='${start}/30*1800':y=0:w=900:h=500:color=red@0.25:t=fill" \
+            -frames:v 1 out/waveform.png
+          ffmpeg -y -v error -i out/raya_preview.m4a -lavfi \
+            "showspectrumpic=s=1800x900:legend=disabled:color=intensity:scale=log" \
+            -frames:v 1 out/spectrogram.png
+          ffprobe -v error -show_entries format=duration:stream=codec_name,sample_rate,channels -of json out/chosen_fast15.m4a > out/chosen_ffprobe.json
+      - name: Upload analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-fastbeat-analysis
+          path: out/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error

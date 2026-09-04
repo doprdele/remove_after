@@ -1,0 +1,83 @@
+name: vimeo-config-probe
+
+on:
+  push:
+    branches: [chatgpt-flag-clean-probe-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe embedded public Vimeo configuration
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p out
+          for spec in 'flag 132108480' 'farc 194571130'; do
+            set -- $spec; key="$1"; id="$2"
+            page="https://vimeo.com/${id}"
+            player="https://player.vimeo.com/video/${id}"
+            ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/135 Safari/537.36'
+            {
+              echo "=== PAGE HEADERS ==="
+              curl -LIsS --compressed -A "$ua" "$page" || true
+              echo "=== PLAYER HEADERS ==="
+              curl -LIsS --compressed -A "$ua" -e "$page" "$player" || true
+              echo "=== CONFIG HEADERS ==="
+              curl -LIsS --compressed -A "$ua" -e "$page" -H 'Accept: application/json,text/plain,*/*' "$player/config" || true
+            } > "out/${key}_headers.txt" 2>&1
+            curl -LfsS --compressed -A "$ua" -e "$page" "$page" -o "out/${key}_page.html" 2>"out/${key}_page.err" || true
+            curl -LfsS --compressed -A "$ua" -e "$page" "$player" -o "out/${key}_player.html" 2>"out/${key}_player.err" || true
+            curl -LfsS --compressed -A "$ua" -e "$page" -H 'Accept: application/json,text/plain,*/*' "$player/config" -o "out/${key}_config.json" 2>"out/${key}_config.err" || true
+            python - "$key" <<'PY'
+import json,re,sys
+from pathlib import Path
+key=sys.argv[1]
+for name in ('page','player'):
+    p=Path(f'out/{key}_{name}.html')
+    if not p.exists(): continue
+    s=p.read_text(errors='replace')
+    urls=sorted(set(re.findall(r'https?:\\?/\\?/[^"\\s<>]+',s)))
+    hits=[u for u in urls if any(x in u for x in ('config','master.json','playlist','m3u8','progressive','vimeocdn'))]
+    Path(f'out/{key}_{name}_urls.txt').write_text('\n'.join(hits[:500]))
+    patterns=['config_url','playerConfig','progressive','master.json','m3u8','jwt','clip_page_config']
+    found=[]
+    for pat in patterns:
+        for m in re.finditer(pat,s,re.I):
+            found.append(s[max(0,m.start()-500):min(len(s),m.end()+1500)])
+            if len(found)>=20: break
+    Path(f'out/{key}_{name}_snippets.txt').write_text('\n\n---HIT---\n'.join(found))
+p=Path(f'out/{key}_config.json')
+if p.exists():
+    try:
+        d=json.loads(p.read_text())
+        summary={
+          'title':d.get('video',{}).get('title'),
+          'duration':d.get('video',{}).get('duration'),
+          'width':d.get('video',{}).get('width'),
+          'height':d.get('video',{}).get('height'),
+          'progressive':[{k:x.get(k) for k in ('quality','width','height','fps','mime','url')} for x in d.get('request',{}).get('files',{}).get('progressive',[])],
+          'hls':d.get('request',{}).get('files',{}).get('hls'),
+          'dash':d.get('request',{}).get('files',{}).get('dash'),
+        }
+        Path(f'out/{key}_summary.json').write_text(json.dumps(summary,indent=2))
+    except Exception as e:
+        Path(f'out/{key}_config_parse_error.txt').write_text(repr(e))
+PY
+          done
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/manifest.txt
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimeo-config-probe
+          path: out/
+          retention-days: 1
+          compression-level: 6
+          if-no-files-found: error

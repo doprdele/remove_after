@@ -1,0 +1,161 @@
+name: do-crime-fastbeat-instagram-final
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-fastbeat-instagram-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install media toolchain
+        run: |
+          set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl fonts-dejavu-core fonts-gfs-didot >/dev/null
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" pillow >/dev/null
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Build final frame-exact renderer
+        run: |
+          set -euxo pipefail
+          python -m py_compile \
+            chatgpt_do_crime_revision/patch_fastbeat.py \
+            chatgpt_do_crime_revision/finalize_fastbeat_instagram.py
+          python chatgpt_do_crime_revision/finalize_fastbeat_instagram.py
+          bash -n chatgpt_do_crime_revision/render_fastbeat_instagram.sh
+
+      - name: Render 1080x1920 60 fps master
+        shell: bash
+        run: |
+          set -o pipefail
+          bash chatgpt_do_crime_revision/render_fastbeat_instagram.sh 2>&1 | tee fastbeat_instagram_build.log
+
+      - name: Create phone-compatible 30 fps copy
+        run: |
+          set -euxo pipefail
+          master=output/do_crime_dont_vote_reel_fastbeat_instagram.mp4
+          test -s "$master"
+          cp "$master" output/do_crime_dont_vote_reel_FASTBEAT_INSTAGRAM_60fps.mp4
+          ffmpeg -y -hide_banner -loglevel warning -i "$master" \
+            -vf 'fps=30,setsar=1,format=yuv420p' -t 15 -frames:v 450 \
+            -c:v libx264 -preset medium -crf 18 -profile:v high -level:v 4.1 \
+            -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 \
+            -af 'apad=pad_dur=0.10,atrim=duration=15,asetpts=N/SR/TB' \
+            -movflags +faststart \
+            output/do_crime_dont_vote_reel_FASTBEAT_INSTAGRAM_iPhone_30fps.mp4
+
+      - name: Technical and visual QC
+        shell: bash
+        run: |
+          set -euxo pipefail
+          master=output/do_crime_dont_vote_reel_FASTBEAT_INSTAGRAM_60fps.mp4
+          phone=output/do_crime_dont_vote_reel_FASTBEAT_INSTAGRAM_iPhone_30fps.mp4
+
+          ffmpeg -v error -i "$master" -f null -
+          ffmpeg -v error -i "$phone" -f null -
+
+          ffprobe -v error -count_frames -show_entries \
+            format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,duration,nb_frames,nb_read_frames \
+            -of json "$master" > output/FASTBEAT_INSTAGRAM_60fps_ffprobe.json
+          ffprobe -v error -count_frames -show_entries \
+            format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,duration,nb_frames,nb_read_frames \
+            -of json "$phone" > output/FASTBEAT_INSTAGRAM_iPhone_ffprobe.json
+
+          python - <<'PY'
+          import json
+          checks = [
+              ('output/FASTBEAT_INSTAGRAM_60fps_ffprobe.json', 60, 900),
+              ('output/FASTBEAT_INSTAGRAM_iPhone_ffprobe.json', 30, 450),
+          ]
+          for path, fps, frames in checks:
+              d = json.load(open(path))
+              streams = {s['codec_type']: s for s in d['streams']}
+              v = streams['video']; a = streams['audio']
+              assert abs(float(d['format']['duration']) - 15.0) < 0.025, d
+              assert (v['width'], v['height']) == (1080, 1920), v
+              assert v['codec_name'] == 'h264' and v['pix_fmt'] == 'yuv420p', v
+              assert v['r_frame_rate'] == f'{fps}/1', v
+              assert int(v.get('nb_read_frames') or v.get('nb_frames') or 0) == frames, v
+              assert a['codec_name'] == 'aac' and a['sample_rate'] == '48000', a
+          open('output/FASTBEAT_INSTAGRAM_QC_PASSED.txt', 'w').write('PASS\n')
+          print('FINAL DELIVERY QC PASSED')
+          PY
+
+          cp work/qc/final_contact_sheet.jpg output/FASTBEAT_INSTAGRAM_contact_sheet.jpg
+          cp work/qc/timeline.txt output/FASTBEAT_INSTAGRAM_timeline.txt
+
+          # Contact sheet and representative frames for the replacement source.
+          ffmpeg -y -hide_banner -loglevel error -i work/src/cash_bag.mp4 \
+            -vf "fps=2,scale=180:320,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=13:fontcolor=white:borderw=2:bordercolor=black,tile=6x4:padding=3:margin=3:color=black" \
+            -frames:v 1 -q:v 2 output/INSTAGRAM_cash_source_contact.jpg
+
+          for spec in '1.00 ig_cash_1s' '1.30 ig_cash_1_3s'; do
+            set -- $spec
+            ffmpeg -y -v error -ss "$1" -i "$master" -frames:v 1 -q:v 1 "output/$2.jpg"
+          done
+
+      - name: Package reproducible build
+        run: |
+          set -euxo pipefail
+          cp chatgpt_do_crime_revision/render_revision.sh output/render_revision.sh
+          cp chatgpt_do_crime_revision/patch_fastbeat.py output/patch_fastbeat.py
+          cp chatgpt_do_crime_revision/finalize_fastbeat_instagram.py output/finalize_fastbeat_instagram.py
+          cp chatgpt_do_crime_revision/render_fastbeat_instagram.sh output/render_fastbeat_instagram.sh
+          cp fastbeat_instagram_build.log output/fastbeat_instagram_build.log
+
+          cat > output/FASTBEAT_INSTAGRAM_README.txt <<'EOF'
+          DO CRIME. DON'T VOTE — faster-beat Instagram replacement revision
+
+          Changes:
+          - uses the denser later section of the same Raya (Slowed) track preview,
+            beginning at 14.740 seconds
+          - approximately 196 BPM double-time cut/impact grid
+          - shots remain about 0.92-1.22 seconds for readability
+          - exactly two clean title cards: opening and closing
+          - replaces the prior woman-with-cash-bags stock shot with the supplied
+            Instagram reel DbsgjHEtQWO, using its clean early cash-scoop sequence
+          - retains the approved Godard supermarket, armed FARC jungle, authentic
+            Linux/cyberdeck, snow drift, cash counting, and visibly burning flag shots
+          - no Runway-generated footage
+
+          Delivery master: 1080x1920, 60 fps, H.264 High, AAC, exactly 15.000 seconds.
+          Phone copy: 1080x1920, 30 fps, H.264 High, AAC, exactly 15.000 seconds.
+          EOF
+
+          zip -9 -j output/do_crime_dont_vote_reel_FASTBEAT_INSTAGRAM_repro.zip \
+            output/render_revision.sh \
+            output/patch_fastbeat.py \
+            output/finalize_fastbeat_instagram.py \
+            output/render_fastbeat_instagram.sh \
+            output/filter_complex.txt \
+            output/FASTBEAT_INSTAGRAM_timeline.txt \
+            output/FASTBEAT_INSTAGRAM_60fps_ffprobe.json \
+            output/FASTBEAT_INSTAGRAM_iPhone_ffprobe.json \
+            output/FASTBEAT_INSTAGRAM_README.txt \
+            output/FASTBEAT_INSTAGRAM_QC_PASSED.txt >/dev/null
+
+      - name: Upload final reel and QC
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-fastbeat-instagram-final
+          path: |
+            output/
+            work/qc/
+            work/frames/
+            fastbeat_instagram_build.log
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn

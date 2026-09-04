@@ -15,14 +15,18 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
       - name: Install media toolchain
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y ffmpeg jq fonts-dejavu-core fonts-gfs-didot curl
-          python -m pip install --upgrade pip pillow
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" pillow
+          yt-dlp --version
           ffmpeg -version | head -n 2
 
-      - name: Patch renderer to direct public media only
+      - name: Patch renderer to sourced moving footage only
         shell: bash
         run: |
           python - <<'PY'
@@ -31,52 +35,58 @@ jobs:
           p=Path('chatgpt_do_crime/do_crime_render.sh')
           s=p.read_text()
 
-          # Replace Vimeo/YouTube-dependent documentary block with direct files.
-          old=re.search(r'# Exact requested Godard supermarket sequence, real FARC documentary footage, and real flag-burning protest footage\..*?# Exact track version',s,re.S)
-          if not old: raise SystemExit('source block not found')
-          direct=r'''# Direct non-generated archival/public sources: no Runway and no YouTube/Vimeo dependency.
-          # Exact Tout Va Bien supermarket frame from the requested long tracking-shot sequence.
-          fetch 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhwpLzuBN8_34_vp-D4gYR_rX3PdXnbI1dsgdtHtJk3IA2usnxrvZB3GLW7qdhSdvTkA0IIcHE7PG9xiXvOt-_GFR5vj0PiPSNo4X0I2renYG3st07fGTrZPm49TrMC1lDci7FcB12DrVE/s0/Screen%2Bshot%2B2010-11-27%2Bat%2B4.57.32%2BPM.png' work/raw/tout_still.png
-          # Genuine FARC archival photograph from DEA Public Affairs / Wikimedia Commons.
-          fetch 'https://commons.wikimedia.org/wiki/Special:Redirect/file/FARC_guerrillas_during_the_Caguan_peace_talks_(1998-2002).jpg' work/raw/farc_still.jpg
-          # Genuine Revolutionary Communist Party flag-burning protest, 1920x1080 CC footage.
+          # Replace inaccessible Vimeo block with direct/alternate-host moving footage.
+          m=re.search(r'# Exact requested Godard supermarket sequence, real FARC documentary footage, and real flag-burning protest footage\..*?# Exact track version',s,re.S)
+          if not m:
+              raise SystemExit('documentary source block not found')
+          block=r'''# Sourced MOVING footage only. No Runway/generated replacements.
+          # Exact Tout Va Bien 1080p BRRip from Internet Archive. The looting begins around 1:29:40.
+          TOUT_URL='https://archive.org/download/tout.-va.-bien.-1972.-jean-luc.-godard.-1080p.-brrip.x-264-classics/Tout.Va.Bien.1972.%28Jean-Luc.Godard%29.1080p.BRRip.x264-Classics/Tout.Va.Bien.1972.%28Jean-Luc.Godard%29.1080p.BRRip.x264-Classics.mp4'
+          ffmpeg -y -hide_banner -loglevel warning -ss 5365 -i "$TOUT_URL" -t 75 -an -c:v libx264 -preset veryfast -crf 17 -movflags +faststart work/raw/tout.mp4
+
+          # Genuine FARC-EP documentary footage mirrored on Dailymotion; use the training/formation passage.
+          rm -f work/raw/farc.* 2>/dev/null || true
+          yt-dlp --no-playlist --retries 8 --fragment-retries 8 --socket-timeout 45 \
+            --download-sections '*20:20-24:20' --force-keyframes-at-cuts \
+            -f 'bestvideo[height>=1080]+bestaudio/best[height>=1080]' --merge-output-format mp4 \
+            -o 'work/raw/farc.%(ext)s' 'https://www.dailymotion.com/video/x9gr61a'
+          farc=$(find work/raw -maxdepth 1 -type f -name 'farc.*' ! -name '*.part' | head -n1)
+          test -s "$farc"
+          [ "$farc" = work/raw/farc.mp4 ] || mv "$farc" work/raw/farc.mp4
+
+          # Genuine left-wing flag-burning protest; original CC file is native 1920x1080.
           fetch 'https://commons.wikimedia.org/wiki/Special:Redirect/file/DNC_Day_4-_Protesters_Attempt_To_Burn_A_Flag.webm' work/raw/flag.webm
+          ffmpeg -y -hide_banner -loglevel warning -i work/raw/flag.webm -t 21 -an -c:v libx264 -preset veryfast -crf 17 -movflags +faststart work/raw/flag.mp4
 
-          # Turn the two genuine archival stills into moving FFmpeg masters; no generated imagery.
-          ffmpeg -y -v warning -loop 1 -framerate 60 -i work/raw/farc_still.jpg -vf "scale=2200:-2:flags=lanczos,zoompan=z='1.08+0.00030*on':x='iw/2-(iw/zoom/2)+sin(on/38)*45':y='ih/2-(ih/zoom/2)':d=1200:s=1920x1080:fps=60,setsar=1,format=yuv420p" -t 20 -an -c:v libx264 -preset veryfast -crf 16 work/raw/farc.mp4
-          ffmpeg -y -v warning -loop 1 -framerate 60 -i work/raw/tout_still.png -vf "scale=2300:-2:flags=lanczos,zoompan=z='1.10+0.00022*on':x='iw/2-(iw/zoom/2)+sin(on/30)*75':y='ih/2-(ih/zoom/2)':d=1200:s=1920x1080:fps=60,setsar=1,format=yuv420p" -t 20 -an -c:v libx264 -preset veryfast -crf 16 work/raw/tout.mp4
-          ffmpeg -y -v warning -stream_loop -1 -i work/raw/flag.webm -t 20 -an -vf 'scale=1920:1080:flags=lanczos,fps=60,setsar=1,format=yuv420p' -c:v libx264 -preset veryfast -crf 17 work/raw/flag.mp4
-
-          # Exact track/version through Apple's public official preview API.
-          fetch 'https://itunes.apple.com/search?term=Raya%20Slowed%20Zericxxn&entity=song&limit=25' work/audio/itunes.json
-          preview=$(jq -r '.results[] | select((.artistName|ascii_downcase)=="zericxxn" and (.trackName|ascii_downcase|contains("raya")) and (.trackName|ascii_downcase|contains("slowed")) and ((.trackName|ascii_downcase|contains("super"))|not) and ((.trackName|ascii_downcase|contains("ultra"))|not)) | .previewUrl' work/audio/itunes.json | head -n1)
-          test -n "$preview"; test "$preview" != null
-          fetch "$preview" work/audio/raya_preview.m4a
-          ffmpeg -y -v warning -i work/audio/raya_preview.m4a -vn -c:a aac -b:a 256k -ar 48000 -ac 2 work/audio/raya_master.m4a
+          # Exact track/version from the artist's official Audiomack page.
+          rm -f work/audio/raya_source.* 2>/dev/null || true
+          yt-dlp --no-playlist --retries 8 --socket-timeout 45 -f 'bestaudio/best' -x --audio-format m4a --audio-quality 0 \
+            -o 'work/audio/raya_source.%(ext)s' 'https://audiomack.com/zericxxn/song/raya-slowed'
+          audio=$(find work/audio -maxdepth 1 -type f -name 'raya_source.*' ! -name '*.part' | head -n1)
+          test -s "$audio"
+          ffmpeg -y -v warning -i "$audio" -vn -c:a aac -b:a 256k -ar 48000 -ac 2 work/audio/raya_master.m4a
 
           # Exact track version'''
-          s=s[:old.start()]+direct+s[old.end():]
+          s=s[:m.start()]+block+s[m.end():]
 
-          # Remove stale Audiomack block that follows the reinserted marker.
+          # Remove the old Audiomack fallback block duplicated after the marker.
           a=s.index('# Exact track version', s.index('work/audio/raya_master.m4a'))
           b=s.index('# Hard source-resolution gate', a)
           s=s[:a]+s[b:]
 
-          # Correct beat grid for Raya (Slowed): 98 BPM; 49 eighth notes = exactly 15 sec.
-          s=s.replace('S=3/11; N=55','S=15/49; N=49')
-          s=s.replace("zip([7,8,9,10],[0,20,40,54])","zip([7,8,9,10],[0,17,34,48])")
-          s=s.replace('-i work/src/flag.mp4 -ss 44.742 -i work/audio/raya_master.m4a','-i work/src/flag.mp4 -i work/audio/raya_master.m4a')
-          s=s.replace('# 55 eighth-note slots at 110 BPM', '# 49 eighth-note slots at 98 BPM')
+          # Preserve the established 55-slot / 110-BPM-style timing and selected audio region.
+          s=s.replace('S=15/49; N=49','S=3/11; N=55')
+          s=s.replace("zip([7,8,9,10],[0,17,34,48])","zip([7,8,9,10],[0,20,40,54])")
+          if '-i work/src/flag.mp4 -i work/audio/raya_master.m4a' in s:
+              s=s.replace('-i work/src/flag.mp4 -i work/audio/raya_master.m4a','-i work/src/flag.mp4 -ss 44.742 -i work/audio/raya_master.m4a')
           p.write_text(s)
 
           low=s.lower()
           assert 'runway' not in low
           assert 'dnznrvs05pmza.cloudfront.net' not in low
-          assert 'vimeo.com/' not in low
-          assert 'youtube.com/watch' not in low
-          assert 'audiomack.com' not in low
-          assert 'S=15/49; N=49' in s
-          print('Direct-only, non-Runway renderer patched')
+          assert 'tout_still' not in low and 'farc_still' not in low
+          assert 'S=3/11; N=55' in s
+          print('Moving-footage-only renderer patched')
           PY
 
       - name: Render reel
@@ -93,8 +103,8 @@ jobs:
           import json,subprocess
           p='output/do_crime_dont_vote_reel.mp4'
           raw=subprocess.check_output(['ffprobe','-v','error','-count_frames','-show_entries','format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels,nb_read_frames','-of','json',p])
-          d=json.loads(raw); s={x['codec_type']:x for x in d['streams']}; v=s['video']; a=s['audio']
-          assert abs(float(d['format']['duration'])-15.0)<.025, d
+          d=json.loads(raw); ss={x['codec_type']:x for x in d['streams']}; v=ss['video']; a=ss['audio']
+          assert abs(float(d['format']['duration'])-15.0)<.025,d
           assert (v['width'],v['height'])==(1080,1920),v
           assert v['codec_name']=='h264' and v['r_frame_rate']=='60/1',v
           assert int(v['nb_read_frames'])==900,v

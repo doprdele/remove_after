@@ -1,0 +1,58 @@
+name: ig-opulence-simple
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-fastbeat-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install media tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg curl >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+          yt-dlp --version
+      - name: Extract public Instagram reel
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out/raw out/contact out/meta out/frames
+          URL='https://www.instagram.com/reel/DbsgjHEtQWO/'
+          yt-dlp --no-playlist --impersonate chrome --retries 8 --fragment-retries 8 --socket-timeout 45 \
+            --write-info-json -f 'bestvideo+bestaudio/best' --merge-output-format mp4 \
+            -o 'out/raw/opulence.%(ext)s' "$URL"
+          src=$(find out/raw -maxdepth 1 -type f -name 'opulence.*' ! -name '*.part' ! -name '*.info.json' | head -n1)
+          test -s "$src"
+          if [ "$src" != out/raw/opulence.mp4 ]; then
+            ffmpeg -y -v error -i "$src" -c copy out/raw/opulence.mp4
+          fi
+          ffprobe -v error -show_entries format=duration,size,bit_rate:stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate -of json out/raw/opulence.mp4 > out/meta/ffprobe.json
+          ffmpeg -y -hide_banner -loglevel error -i out/raw/opulence.mp4 \
+            -vf "fps=1,scale=240:426:force_original_aspect_ratio=decrease,pad=240:426:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=5:y=5:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=6x5:padding=3:margin=3:color=black" \
+            -frames:v 1 -q:v 2 out/contact/page0.jpg
+          ffmpeg -y -hide_banner -loglevel error -ss 30 -i out/raw/opulence.mp4 \
+            -vf "fps=1,scale=240:426:force_original_aspect_ratio=decrease,pad=240:426:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=5:y=5:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=6x5:padding=3:margin=3:color=black" \
+            -frames:v 1 -q:v 2 out/contact/page30.jpg || true
+          for t in 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44; do
+            ffmpeg -y -v error -ss "$t" -i out/raw/opulence.mp4 -frames:v 1 -q:v 1 "out/frames/frame_${t}.jpg" || true
+          done
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/meta/manifest.txt
+      - name: Upload extracted reel and visual contacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ig-opulence-simple
+          path: out/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn

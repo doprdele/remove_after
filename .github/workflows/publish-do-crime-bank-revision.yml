@@ -1,0 +1,70 @@
+name: publish-do-crime-bank-revision
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-publish-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_BRANCH: chatgpt-do-crime-corrected-actual-20260904
+      SOURCE_WORKFLOW: do-crime-actual-bank-revision.yml
+      ARTIFACT_NAME: do-crime-actual-bank-revision
+      RELEASE_TAG: do-crime-bank-revision-20260904
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for the actual render workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          for attempt in $(seq 1 120); do
+            response=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${SOURCE_WORKFLOW}/runs?branch=${SOURCE_BRANCH}&per_page=5")
+            run_id=$(jq -r '.workflow_runs[0].id // empty' <<<"$response")
+            status=$(jq -r '.workflow_runs[0].status // empty' <<<"$response")
+            conclusion=$(jq -r '.workflow_runs[0].conclusion // empty' <<<"$response")
+            echo "attempt=${attempt} run=${run_id} status=${status} conclusion=${conclusion}"
+            if [[ "$status" == completed ]]; then
+              if [[ "$conclusion" != success ]]; then
+                gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed || true
+                echo "Source render failed: ${conclusion}" >&2
+                exit 1
+              fi
+              printf '%s\n' "$run_id" > /tmp/source_run_id
+              break
+            fi
+            sleep 30
+          done
+          [[ -s /tmp/source_run_id ]] || { echo 'Timed out waiting for source render' >&2; exit 1; }
+
+      - name: Download verified artifact
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p release_files
+          run_id=$(cat /tmp/source_run_id)
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir release_files
+          test -s release_files/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_60fps.mp4
+          test -s release_files/final_ffprobe.json
+          jq -e '.validated_frame_count == 900' release_files/final_ffprobe.json >/dev/null
+          jq -e '(.format.duration|tonumber) >= 14.98 and (.format.duration|tonumber) <= 15.02' release_files/final_ffprobe.json >/dev/null
+
+      - name: Publish predictable release assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh release delete "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$RELEASE_TAG" release_files/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "DO CRIME. DON'T VOTE — verified bank-robbery revision" \
+            --notes "Verified 15.000-second 1080x1920 60 fps revision. FARC shots are replaced by three distinct armed-robbery clips and the prior flag insert is replaced by a clear American-flag-burning protest shot. Includes contact sheets, reports and reproducible pipeline."

@@ -44,11 +44,7 @@ jobs:
             ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/video/${key}.mp4" > "out/meta/${key}.json"
 
             dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "out/video/${key}.mp4")
-            pages=$(python - "$dur" <<'PY'
-import math,sys
-print(max(1, math.ceil(float(sys.argv[1])/60)))
-PY
-            )
+            pages=$(python -c 'import math,sys; print(max(1, math.ceil(float(sys.argv[1])/60)))' "$dur")
             for ((page=0; page<pages; page++)); do
               start=$((page*60))
               ffmpeg -y -hide_banner -loglevel error -ss "$start" -t 60 -i "out/video/${key}.mp4" \

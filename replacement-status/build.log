@@ -1,0 +1,306 @@
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --flat-playlist --dump-json ytsearch12:The Dark Knight bank robbery opening scene 1080p
+{"version": "2026.08.19", "current_git_head": null, "release_git_head": "594bd50c2c78ac432f81600d309fdc4e0a92d82c", "repository": "yt-dlp/yt-dlp"}}
+{"_type": "url", "ie_key": "Youtube", "id": "uEFYXKavFEY", "url": "https://www.youtube.com/watch?v=uEFYXKavFEY", "title": "Batman The Dark Knight- Bank Robbery", "description": "Joker robs a bank.", "duration": 290, "channel_id": "UCc_9qmTk5_-uhXfRWTCwDiQ", "channel": "PumaProductionsZF", "channel_url": "https://www.youtube.com/channel/UCc_9qmTk5_-uhXfRWTCwDiQ", "uploader": "PumaProductionsZF", "uploader_id": "@PumaProductionsZF", "uploader_url": "https://www.youtube.com/@PumaProductionsZF", "thumbnails": [{"url": "https://i.ytimg.com/vi/uEFYXKavFEY/hqdefault.jpg?sqp=-oaymwFBCOADEI4CSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-BIAC4AOKAgwIABABGHIgVChAMA8=&rs=AOn4CLBxpg5vK0l2SS1hAAdLzmHXd0mmxQ", "height": 270, "width": 480}], "timestamp": null, "release_timestamp": null, "availability": null, "view_count": 36986, "live_status": null, "channel_is_verified": null, "__x_forwarded_for_ip": null, "webpage_url": "https://www.youtube.com/watch?v=uEFYXKavFEY", "original_url": "https://www.youtube.com/watch?v=uEFYXKavFEY", "webpage_url_basename": "watch", "webpage_url_domain": "youtube.com", "extractor": "youtube", "extractor_key": "Youtube", "playlist_count": 12, "playlist": "The Dark Knight bank robbery opening scene 1080p", "playlist_id": "The Dark Knight bank robbery opening scene 1080p", "playlist_title": "The Dark Knight bank robbery opening scene 1080p", "playlist_uploader": null, "playlist_uploader_id": null, "playlist_channel": null, "playlist_channel_id": null, "playlist_webpage_url": "ytsearch12:The Dark Knight bank robbery opening scene 1080p", "n_entries": 12, "playlist_index": 10, "__last_playlist_index": 12, "playlist_autonumber": 10, "epoch": 1788541743, "duration_string": "4:50", "release_year": null, "_version": {"version": "2026.08.19", "current_git_head": null, "release_git_head": "594bd50c2c78ac432f81600d309fdc4e0a92d82c", "repository": "yt-dlp/yt-dlp"}}
+{"_type": "url", "ie_key": "Youtube", "id": "-FW9Sqxb-4o", "url": "https://www.youtube.com/watch?v=-FW9Sqxb-4o", "title": "Batman kidnaps Lau from Hong Kong | The Dark Knight [4k, HDR, IMAX]", "description": "The Dark Knight (2008) Scene: Batman kidnaps Lau from Hong Kong Playlist: https://is.gd/Pxi1yK Storyline: When the menace\u00a0...", "duration": 271, "channel_id": "UC-GAhNmY6bkuuRPUSaRI_oQ", "channel": "Flashback FM", "channel_url": "https://www.youtube.com/channel/UC-GAhNmY6bkuuRPUSaRI_oQ", "uploader": "Flashback FM", "uploader_id": "@flashbackfm", "uploader_url": "https://www.youtube.com/@flashbackfm", "thumbnails": [{"url": "https://i.ytimg.com/vi/-FW9Sqxb-4o/hqdefault.jpg?sqp=-oaymwEnCOADEI4CSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLB6LvTMVmGY9nPgUxIEu7mkXYCwfw", "height": 270, "width": 480}], "timestamp": null, "release_timestamp": null, "availability": null, "view_count": 20435962, "live_status": null, "channel_is_verified": true, "__x_forwarded_for_ip": null, "webpage_url": "https://www.youtube.com/watch?v=-FW9Sqxb-4o", "original_url": "https://www.youtube.com/watch?v=-FW9Sqxb-4o", "webpage_url_basename": "watch", "webpage_url_domain": "youtube.com", "extractor": "youtube", "extractor_key": "Youtube", "playlist_count": 12, "playlist": "The Dark Knight bank robbery opening scene 1080p", "playlist_id": "The Dark Knight bank robbery opening scene 1080p", "playlist_title": "The Dark Knight bank robbery opening scene 1080p", "playlist_uploader": null, "playlist_uploader_id": null, "playlist_channel": null, "playlist_channel_id": null, "playlist_webpage_url": "ytsearch12:The Dark Knight bank robbery opening scene 1080p", "n_entries": 12, "playlist_index": 11, "__last_playlist_index": 12, "playlist_autonumber": 11, "epoch": 1788541743, "duration_string": "4:31", "release_year": null, "_version": {"version": "2026.08.19", "current_git_head": null, "release_git_head": "594bd50c2c78ac432f81600d309fdc4e0a92d82c", "repository": "yt-dlp/yt-dlp"}}
+{"_type": "url", "ie_key": "Youtube", "id": "_0bn25NeO-w", "url": "https://www.youtube.com/watch?v=_0bn25NeO-w", "title": "The Dark Knight- Bank Robbery scene HD", "description": "The Dark Knight 2008- Bank Robbery scene HD Credit WB Pictures, DC COMICS Fair Use Copyright Disclaimer under section\u00a0...", "duration": 240, "channel_id": "UCsgdoBeSoWfrFhDNEi95KJg", "channel": "BMS Videos", "channel_url": "https://www.youtube.com/channel/UCsgdoBeSoWfrFhDNEi95KJg", "uploader": "BMS Videos", "uploader_id": "@bmsvideos1883", "uploader_url": "https://www.youtube.com/@bmsvideos1883", "thumbnails": [{"url": "https://i.ytimg.com/vi/_0bn25NeO-w/hqdefault.jpg?sqp=-oaymwEnCOADEI4CSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLChXGCZr3ed-Ek3Z5iH3_DdIAzFqg", "height": 270, "width": 480}], "timestamp": null, "release_timestamp": null, "availability": null, "view_count": 54, "live_status": null, "channel_is_verified": null, "__x_forwarded_for_ip": null, "webpage_url": "https://www.youtube.com/watch?v=_0bn25NeO-w", "original_url": "https://www.youtube.com/watch?v=_0bn25NeO-w", "webpage_url_basename": "watch", "webpage_url_domain": "youtube.com", "extractor": "youtube", "extractor_key": "Youtube", "playlist_count": 12, "playlist": "The Dark Knight bank robbery opening scene 1080p", "playlist_id": "The Dark Knight bank robbery opening scene 1080p", "playlist_title": "The Dark Knight bank robbery opening scene 1080p", "playlist_uploader": null, "playlist_uploader_id": null, "playlist_channel": null, "playlist_channel_id": null, "playlist_webpage_url": "ytsearch12:The Dark Knight bank robbery opening scene 1080p", "n_entries": 12, "playlist_index": 12, "__last_playlist_index": 12, "playlist_autonumber": 12, "epoch": 1788541743, "duration_string": "4:00", "release_year": null, "_version": {"version": "2026.08.19", "current_git_head": null, "release_git_head": "594bd50c2c78ac432f81600d309fdc4e0a92d82c", "repository": "yt-dlp/yt-dlp"}}
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --flat-playlist --dump-json dmsearch6:The Dark Knight bank robbery opening scene 1080p
+ERROR: Unable to handle request: Unsupported url scheme: "dmsearch6" (curl_cffi, requests, urllib, websockets)
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=Dbvj1prhdr8
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] Dbvj1prhdr8: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=Dbvj1prhdr8
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] Dbvj1prhdr8: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=Dbvj1prhdr8
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] Dbvj1prhdr8: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=Dbvj1prhdr8
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] Dbvj1prhdr8: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=0OYBEquZ_j0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] 0OYBEquZ_j0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=0OYBEquZ_j0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] 0OYBEquZ_j0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=0OYBEquZ_j0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] 0OYBEquZ_j0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=0OYBEquZ_j0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] 0OYBEquZ_j0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=IsUjAS34nes
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] IsUjAS34nes: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=IsUjAS34nes
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] IsUjAS34nes: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=IsUjAS34nes
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] IsUjAS34nes: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=IsUjAS34nes
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] IsUjAS34nes: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=OUueYCqnPGg
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] OUueYCqnPGg: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=OUueYCqnPGg
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] OUueYCqnPGg: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=OUueYCqnPGg
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] OUueYCqnPGg: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=OUueYCqnPGg
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] OUueYCqnPGg: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=EfKz98lAynY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] EfKz98lAynY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=EfKz98lAynY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] EfKz98lAynY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=EfKz98lAynY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] EfKz98lAynY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=EfKz98lAynY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] EfKz98lAynY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=XTNsoYxvUHs
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] XTNsoYxvUHs: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=XTNsoYxvUHs
+ERROR: [youtube] XTNsoYxvUHs: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=XTNsoYxvUHs
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] XTNsoYxvUHs: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=XTNsoYxvUHs
+ERROR: [youtube] XTNsoYxvUHs: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=dBR5bXSCgk0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] dBR5bXSCgk0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=dBR5bXSCgk0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] dBR5bXSCgk0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=dBR5bXSCgk0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] dBR5bXSCgk0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=dBR5bXSCgk0
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] dBR5bXSCgk0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=_0bn25NeO-w
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] _0bn25NeO-w: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=_0bn25NeO-w
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] _0bn25NeO-w: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=_0bn25NeO-w
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] _0bn25NeO-w: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=_0bn25NeO-w
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] _0bn25NeO-w: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=vetKTtM7YyU
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] vetKTtM7YyU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=vetKTtM7YyU
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] vetKTtM7YyU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=vetKTtM7YyU
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] vetKTtM7YyU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=vetKTtM7YyU
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] vetKTtM7YyU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=a7iEgWI11Bo
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] a7iEgWI11Bo: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=a7iEgWI11Bo
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] a7iEgWI11Bo: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=a7iEgWI11Bo
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] a7iEgWI11Bo: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=a7iEgWI11Bo
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] a7iEgWI11Bo: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=uEFYXKavFEY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] uEFYXKavFEY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=uEFYXKavFEY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] uEFYXKavFEY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=uEFYXKavFEY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] uEFYXKavFEY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=uEFYXKavFEY
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] uEFYXKavFEY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_embedded --dump-single-json https://www.youtube.com/watch?v=-FW9Sqxb-4o
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] -FW9Sqxb-4o: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=android_vr --dump-single-json https://www.youtube.com/watch?v=-FW9Sqxb-4o
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] -FW9Sqxb-4o: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --extractor-args youtube:player_client=web_safari --dump-single-json https://www.youtube.com/watch?v=-FW9Sqxb-4o
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] -FW9Sqxb-4o: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
++ yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome --dump-single-json https://www.youtube.com/watch?v=-FW9Sqxb-4o
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] -FW9Sqxb-4o: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+
+null
+
+Traceback (most recent call last):
+  File "/home/runner/work/remove_after/remove_after/do-crime-actions/fetch_replacements.py", line 186, in <module>
+    if __name__=='__main__': main()
+                             ^^^^^^
+  File "/home/runner/work/remove_after/remove_after/do-crime-actions/fetch_replacements.py", line 171, in main
+    raw,m=select(key,q,terms,mode,limit)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/remove_after/remove_after/do-crime-actions/fetch_replacements.py", line 142, in select
+    if not choices: raise RuntimeError('no usable 1080p source for '+key)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no usable 1080p source for bank_robbery_1

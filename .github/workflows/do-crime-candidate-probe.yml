@@ -1,0 +1,120 @@
+name: do-crime-candidate-probe
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install media tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Search and download candidate clips
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe/{results,raw,contact,meta}
+          YTDLP=(yt-dlp --no-playlist --force-ipv4 --retries 10 --fragment-retries 10 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome)
+
+          search_query() {
+            local key="$1" query="$2" count="$3"
+            echo "SEARCH: $query"
+            "${YTDLP[@]}" --flat-playlist --playlist-end "$count" \
+              --print '%(id)s\t%(duration)s\t%(title)s\t%(uploader)s' \
+              "ytsearch${count}:${query}" > "probe/results/${key}.tsv" || true
+          }
+
+          search_query flag_a 'left wing protesters burn American flag raw footage' 10
+          search_query flag_b 'antifa burns American flag protest raw video' 10
+          search_query flag_c 'Revolution Club burns American flag White House raw' 10
+          search_query bank_dark_knight 'The Dark Knight opening bank robbery scene 1080p' 8
+          search_query bank_heat 'Heat bank robbery scene 1080p' 8
+          search_query bank_town 'The Town bank robbery scene 1080p' 8
+          search_query bank_point_break 'Point Break bank robbery scene 1080p' 8
+          search_query bank_inside_man 'Inside Man bank robbery scene 1080p' 8
+
+          cat probe/results/*.tsv > probe/results/all.tsv
+
+          # Prefer recognizable, reasonably short clips; download up to 150 seconds for visual review.
+          python - <<'PY'
+from pathlib import Path
+import re
+rows=[]
+for p in sorted(Path('probe/results').glob('*.tsv')):
+    cat=p.stem
+    for line in p.read_text(errors='ignore').splitlines():
+        parts=line.split('\t',3)
+        if len(parts)<4: continue
+        vid,dur,title,uploader=parts
+        try: d=float(dur)
+        except: d=0
+        rows.append((cat,vid,d,title,uploader))
+
+chosen=[]
+for cat in sorted({r[0] for r in rows}):
+    candidates=[r for r in rows if r[0]==cat and 8 <= r[2] <= 1200]
+    # Skip obvious commentary/reaction/shorts compilations when better candidates exist.
+    candidates.sort(key=lambda r:(
+        bool(re.search(r'reaction|explained|analysis|trailer|review|shorts',r[3],re.I)),
+        abs(r[2]-180),
+    ))
+    for r in candidates[:3]:
+        if r[1] not in {x[1] for x in chosen}:
+            chosen.append(r)
+Path('probe/meta/chosen.tsv').write_text('\n'.join('\t'.join(map(str,r)) for r in chosen)+'\n')
+print('\n'.join('\t'.join(map(str,r)) for r in chosen))
+PY
+
+          while IFS=$'\t' read -r category video_id duration title uploader; do
+            [[ -n "$video_id" ]] || continue
+            key="${category}_${video_id}"
+            echo "DOWNLOAD $key | $title"
+            rm -f "probe/raw/${key}."* 2>/dev/null || true
+            ok=0
+            for client in web_embedded android_vr web_safari default; do
+              rm -f "probe/raw/${key}."* 2>/dev/null || true
+              args=("${YTDLP[@]}" --write-info-json --download-sections '*0-150' --force-keyframes-at-cuts \
+                -f 'bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/best[height>=720]' \
+                --merge-output-format mp4 -o "probe/raw/${key}.%(ext)s")
+              if [[ "$client" != default ]]; then
+                args+=(--extractor-args "youtube:player_client=${client}")
+              fi
+              if "${args[@]}" "https://www.youtube.com/watch?v=${video_id}"; then ok=1; break; fi
+              sleep 2
+            done
+            [[ "$ok" -eq 1 ]] || continue
+            src=$(find probe/raw -maxdepth 1 -type f -name "${key}.*" ! -name '*.info.json' ! -name '*.part' | head -n1)
+            [[ -s "$src" ]] || continue
+            ffprobe -v error -show_entries format=filename,duration,size:stream=index,codec_name,width,height,r_frame_rate -of json "$src" > "probe/meta/${key}.ffprobe.json" || true
+            ffmpeg -y -hide_banner -loglevel error -i "$src" \
+              -vf "fps=1/5,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=8:y=8:fontsize=17:fontcolor=white:borderw=2:bordercolor=black,tile=6x5:padding=3:margin=3:color=black" \
+              -frames:v 1 -q:v 2 "probe/contact/${key}.jpg" || true
+          done < probe/meta/chosen.tsv
+
+          find probe -type f -printf '%P\t%s bytes\n' | sort > probe/meta/manifest.txt
+
+      - name: Upload candidate review bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-candidate-probe
+          path: probe/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error

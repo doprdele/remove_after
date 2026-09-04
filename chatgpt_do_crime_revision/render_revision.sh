@@ -35,12 +35,13 @@ TOUT_URL='https://archive.org/download/tout.-va.-bien.-1972.-jean-luc.-godard.-1
 ffmpeg -y -hide_banner -loglevel warning -ss 5365 -i "$TOUT_URL" -t 75 -an \
   -c:v libx264 -preset veryfast -crf 17 -movflags +faststart work/raw/tout.mp4
 
-# Replacement documentary sections selected from contact sheets.
-# x3ho0sq, 20-28: a FARC column walking through jungle with weapons and field gear.
-# x4yv8jf, 24-30: a group of armed FARC members in a jungle camp.
-# x696jv6, 103-123: the giant U.S. flag is already visibly burning.
-dm_section farc_walk x3ho0sq '20-28'
+# Replacement documentary sections selected from full contact sheets.
+# The first insert shows several armed FARC members moving together in jungle.
+# The second provides a clear close rifle walk, and the third an armed lineup.
+dm_section farc_group x3ho0sq '43-45.2'
+dm_section farc_rifle x3ho0sq '20-28'
 dm_section farc_armed x4yv8jf '24-30'
+# Large U.S.-flag-pattern banner already visibly burning, among left-wing protesters.
 dm_section flag_burning x696jv6 '103-123'
 
 # Same supplied track/version as the approved first render.
@@ -51,22 +52,23 @@ fetch "$preview" work/audio/raya_preview.m4a
 ffmpeg -y -hide_banner -loglevel warning -i work/audio/raya_preview.m4a -vn \
   -c:a aac -b:a 256k -ar 48000 -ac 2 work/audio/raya_master.m4a
 
-# Record native source dimensions. The two historical FARC mirrors and the protest
-# clip are the best clean archival copies available and are deliberately isolated
-# to short inserts; all stock and film material is HD/4K.
+# Record source dimensions for reproducibility.
 python - <<'PY'
 import glob,json,subprocess
 rows=[]
 for f in sorted(glob.glob('work/raw/*')):
-    if not f.lower().endswith(('.mp4','.mkv','.webm','.mov')): continue
-    d=json.loads(subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=width,height,r_frame_rate','-of','json',f]))
+    if not f.lower().endswith(('.mp4','.mkv','.webm','.mov')):
+        continue
+    d=json.loads(subprocess.check_output([
+        'ffprobe','-v','error','-select_streams','v:0',
+        '-show_entries','stream=width,height,r_frame_rate','-of','json',f
+    ]))
     s=d['streams'][0]
     rows.append({'file':f,'width':s['width'],'height':s['height'],'fps':s.get('r_frame_rate')})
 open('work/qc/source_dimensions.json','w').write(json.dumps(rows,indent=2))
 PY
 
-# Normalize only the selected clean areas. Central documentary crops remove corner
-# bugs and all lower-third/subtitle regions before any effects are applied.
+# Normalize only clean areas. Crops remove source bugs, captions, and lower thirds.
 ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/cash_counting.mp4 -an \
   -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
   -t 12 -c:v libx264 -preset veryfast -crf 17 -profile:v high work/src/cash_counting.mp4
@@ -89,36 +91,44 @@ ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/snow.mp4 -a
   -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
   -t 14 -c:v libx264 -preset veryfast -crf 17 -profile:v high work/src/snow.mp4
 
-# Walking column: exact 9:16 central crop eliminates the Al Jazeera corner bug.
-ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_walk.mp4 -an \
-  -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
-  -t 8 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_walk.mp4
+# Several armed members together in jungle. The right-side crop excludes the
+# reporter, the lower-third, and the Al Jazeera corner mark.
+ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_group.mp4 -an \
+  -vf "crop=192:288:320:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
+  -t 4 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_group.mp4
 
-# Armed lineup: crop from the upper-left/middle picture area, excluding both the
-# broadcaster bug at upper-right and the burned-in Spanish subtitles below y=220.
+# Armed lineup: upper-left/middle crop excludes the BBC bug and subtitles.
 ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_armed.mp4 -an \
   -vf "crop=150:220:90:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
   -t 6 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_armed.mp4
+
+# Rifle carriers walking through jungle; this crop keeps the rifles and field gear
+# while excluding the lower-left broadcaster mark.
+ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_rifle.mp4 -an \
+  -vf "crop=220:288:145:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
+  -t 8 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_rifle.mp4
 
 # Keep the same Godard crop/composition the user approved.
 ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/tout.mp4 -an \
   -vf "crop=iw*0.52:ih*0.86:(iw-iw*0.52)*0.31:ih*0.02,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
   -t 20 -c:v libx264 -preset veryfast -crf 17 -profile:v high work/src/tout.mp4
 
-# Central portrait crop removes the small Newsflare corner mark. Flames and the
-# U.S.-flag pattern stay centered throughout the selected range.
+# Central crop removes the Newsflare mark while keeping the burning flag centered.
 ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/flag_burning.mp4 -an \
   -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
   -t 18 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/flag_burning.mp4
 
-# Two clean full-screen Godard/Evangelion-style title cards, with spaces preserved.
+# Exactly two clean full-screen Godard/Evangelion-style title cards.
 python - <<'PY'
 from pathlib import Path
 from PIL import Image,ImageDraw,ImageFont
 W,H=1080,1920
 rows=11
 rh=(H+rows-1)//rows
-fonts=[Path('/usr/share/fonts/opentype/didot/GFSDidotBold.otf'),Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf')]
+fonts=[
+    Path('/usr/share/fonts/opentype/didot/GFSDidotBold.otf'),
+    Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'),
+]
 fp=next(p for p in fonts if p.exists())
 phrase='DO CRIME. DON’T VOTE  DO CRIME. DON’T VOTE'
 font=ImageFont.truetype(str(fp),150)
@@ -127,7 +137,10 @@ d=ImageDraw.Draw(probe)
 box=d.textbbox((0,0),phrase,font=font)
 d.text((-box[0],-box[1]),phrase,font=font,fill=255)
 mask=probe.crop(probe.getbbox()).resize((W,rh),Image.Resampling.LANCZOS)
-palettes=[(('#090909','#E6FF00'),('#1B22D8','#FF167A')),(('#FFF5DD','#1B22D8'),('#090909','#FF167A'))]
+palettes=[
+    (('#090909','#E6FF00'),('#1B22D8','#FF167A')),
+    (('#FFF5DD','#1B22D8'),('#090909','#FF167A')),
+]
 out=Path('work/title')
 for n,pairs in enumerate(palettes):
     canvas=Image.new('RGB',(W,H),pairs[0][0])
@@ -140,60 +153,68 @@ for n,pairs in enumerate(palettes):
     canvas.save(out/f'title{n}.png',optimize=True)
 PY
 
-# Beat analysis of the approved soundtrack yields approximately 97.51 BPM.
-# Cuts use one- or two-beat blocks, instead of the prior eighth-note barrage.
+# Longer beat-aligned edit: 13 footage shots totaling 22 beats. Most shots are
+# two full beats (~1.23 seconds), replacing the prior eighth-note barrage.
 python - <<'PY'
 from pathlib import Path
 B=60/97.50884433962264
 TITLE_OPEN=0.685
 TITLE_CLOSE=15-(TITLE_OPEN+22*B)
-# 13 footage shots; lengths sum to 22 beats. Most last two full beats (~1.23 s).
 shots=[
  ('cash_counting',0,0.25,2,0.92),
  ('cash_bag',1,0.60,2,0.88),
- ('farc_walk',4,0.70,2,0.92),
- ('tout',6,0.45,2,1.00),
+ ('farc_group',4,0.12,2,0.90),
+ ('tout',7,0.45,2,1.00),
  ('cyber',2,0.40,1,1.12),
  ('snow',3,1.10,2,1.18),
- ('flag_burning',7,0.60,2,0.88),
- ('farc_armed',5,0.10,2,0.84),
- ('tout',6,4.10,1,0.96),
+ ('flag_burning',8,0.60,2,0.88),
+ ('farc_armed',5,2.05,2,0.84),
+ ('tout',7,4.10,1,0.96),
  ('cyber',2,8.70,2,1.04),
  ('cash_counting',0,3.10,1,1.10),
- ('farc_walk',4,3.00,2,0.88),
- ('flag_burning',7,7.10,1,0.92),
+ ('farc_rifle',6,6.00,2,0.88),
+ ('flag_burning',8,7.10,1,0.92),
 ]
 parts=[]
 labels=[]
-# Clean title streams. They never pass through noise, scanlines or RGB splitting.
-parts.append(f'[9:v]trim=duration={TITLE_OPEN:.9f},setpts=PTS-STARTPTS,fps=60,scale=1080:1920,setsar=1,format=yuv420p[topen]')
+# Titles are concatenated after footage processing, so they remain completely clean.
+parts.append(f'[10:v]trim=duration={TITLE_OPEN:.9f},setpts=PTS-STARTPTS,fps=60,scale=1080:1920,setsar=1,format=yuv420p[topen]')
 labels.append('[topen]')
 for i,(name,inp,cue,beats,speed) in enumerate(shots):
     dur=beats*B
     source_dur=dur*speed
-    zoom=1.045+(i%4)*0.018
+    archival=name in {'farc_group','farc_armed','farc_rifle','flag_burning'}
+    zoom=(1.020+(i%2)*0.008) if archival else (1.045+(i%4)*0.018)
+    shake_x=4 if archival else 10
+    shake_y=3 if archival else 8
+    contrast=1.14 if archival else 1.23+(i%3)*0.035
+    saturation=1.25 if archival else 1.34+(i%4)*0.05
+    brightness=0.005 if archival else -0.025
+    rgb=5 if archival else 8+(i%3)*3
+    rgbv=1 if archival else 2
+    grain=5 if archival else 8+(i%4)*2
+    scan=0.17 if archival else 0.24
     sw=round(1080*zoom); sh=round(1920*zoom)
     maxx=sw-1080; maxy=sh-1920
     xbase=maxx/2; ybase=maxy/2
-    # Dynamic crop movement supplies restrained shake while preserving legibility.
     chain=(f'[{inp}:v]trim=start={cue:.4f}:end={cue+source_dur:.4f},'
            f'setpts=(PTS-STARTPTS)/{speed:.6f},fps=60,scale={sw}:{sh}:flags=bicubic,'
-           f"crop=1080:1920:x='{xbase:.2f}+min({maxx/3:.2f}\\,10)*sin(31*t+{i})':"
-           f"y='{ybase:.2f}+min({maxy/3:.2f}\\,8)*cos(27*t+{i})',setsar=1,")
+           f"crop=1080:1920:x='{xbase:.2f}+min({maxx/3:.2f}\\,{shake_x})*sin(31*t+{i})':"
+           f"y='{ybase:.2f}+min({maxy/3:.2f}\\,{shake_y})*cos(27*t+{i})',setsar=1,")
     if i in {4,7,10}:
         chain+='loop=loop=1:size=4:start=28,'
     chain+=(f'trim=duration={dur:.9f},setpts=PTS-STARTPTS,'
-            f'eq=contrast={1.23+(i%3)*0.035:.3f}:saturation={1.34+(i%4)*0.05:.3f}:brightness=-0.025,'
-            f'rgbashift=rh={8+(i%3)*3}:bh={-8-(i%3)*3}:rv=2:bv=-2,'
-            f'noise=alls={8+(i%4)*2}:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@0.24,'
+            f'eq=contrast={contrast:.3f}:saturation={saturation:.3f}:brightness={brightness:.3f},'
+            f'rgbashift=rh={rgb}:bh={-rgb}:rv={rgbv}:bv={-rgbv},'
+            f'noise=alls={grain}:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@{scan:.2f},'
             f'unsharp=5:5:0.75:5:5:0,format=yuv420p[s{i}]')
     parts.append(chain)
     labels.append(f'[s{i}]')
-parts.append(f'[10:v]trim=duration={TITLE_CLOSE:.9f},setpts=PTS-STARTPTS,fps=60,scale=1080:1920,setsar=1,format=yuv420p[tclose]')
+parts.append(f'[11:v]trim=duration={TITLE_CLOSE:.9f},setpts=PTS-STARTPTS,fps=60,scale=1080:1920,setsar=1,format=yuv420p[tclose]')
 labels.append('[tclose]')
 parts.append(''.join(labels)+f'concat=n={len(labels)}:v=1:a=0[base]')
 
-# Impact flashes occur on beat boundaries inside footage, never over title cards.
+# Hard white/negative impacts on footage beat boundaries only.
 bounds=[]
 t=TITLE_OPEN
 for _,_,_,beats,_ in shots:
@@ -205,7 +226,7 @@ neg='+'.join(f'between(t,{x-.018:.6f},{x+.018:.6f})' for x in neg_times)
 white='+'.join(f'between(t,{x-.018:.6f},{x+.018:.6f})' for x in white_times)
 parts.append(f"[base]negate=enable='{neg}',drawbox=x=0:y=0:w=iw:h=ih:color=white@1:t=fill:enable='{white}'[impact]")
 
-# Three moving horizontal tear bands, again confined to footage beat impacts.
+# Three short horizontal tear bands at selected beat impacts.
 parts += [
  '[impact]split=4[m][a][b][c]',
  '[a]format=rgba,crop=1080:110:0:335,pad=1080:1920:0:335:color=black@0[ta]',
@@ -236,15 +257,16 @@ ffmpeg -y -hide_banner -loglevel warning \
   -i work/src/cash_bag.mp4 \
   -i work/src/cyber.mp4 \
   -i work/src/snow.mp4 \
-  -i work/src/farc_walk.mp4 \
+  -i work/src/farc_group.mp4 \
   -i work/src/farc_armed.mp4 \
+  -i work/src/farc_rifle.mp4 \
   -i work/src/tout.mp4 \
   -i work/src/flag_burning.mp4 \
   -i work/audio/raya_master.m4a \
   -loop 1 -framerate 60 -i work/title/title0.png \
   -loop 1 -framerate 60 -i work/title/title1.png \
   -filter_complex_script work/filter.txt \
-  -map '[outv]' -map 8:a:0 -t 15 -frames:v 900 \
+  -map '[outv]' -map 9:a:0 -t 15 -frames:v 900 \
   -c:v libx264 -preset medium -crf 17 -maxrate 16M -bufsize 32M \
   -profile:v high -level:v 4.2 -pix_fmt yuv420p -r 60 -g 60 -keyint_min 60 -sc_threshold 0 \
   -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
@@ -252,7 +274,7 @@ ffmpeg -y -hide_banner -loglevel warning \
   -af 'afade=t=in:st=0:d=0.012,afade=t=out:st=14.93:d=0.07,alimiter=limit=0.97' \
   -movflags +faststart output/do_crime_dont_vote_reel_revision.mp4
 
-# Technical QC and decode test.
+# Technical QC and complete decode test.
 ffprobe -v error -count_frames -show_entries \
   format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,duration,nb_frames,nb_read_frames \
   -of json output/do_crime_dont_vote_reel_revision.mp4 | tee work/qc/final_ffprobe.json
@@ -278,13 +300,13 @@ ffmpeg -y -hide_banner -loglevel error -i output/do_crime_dont_vote_reel_revisio
   -vf "fps=4/3,scale=216:384,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=5:y=5:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=5x4:padding=4:margin=4:color=black" \
   -frames:v 1 -q:v 2 work/qc/final_contact_sheet.jpg
 
-for k in cash_counting cash_bag cyber snow farc_walk farc_armed tout flag_burning; do
+for k in cash_counting cash_bag cyber snow farc_group farc_armed farc_rifle tout flag_burning; do
   ffmpeg -y -hide_banner -loglevel error -i "work/src/${k}.mp4" \
     -vf "fps=1,scale=180:320,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=13:fontcolor=white:borderw=2:bordercolor=black,tile=6x4:padding=3:margin=3:color=black" \
     -frames:v 1 -q:v 2 "work/qc/${k}_contact.jpg" || true
 done
 
-for spec in '0.20 title_open' '2.20 farc_walk' '6.00 flag_burning' '7.40 farc_armed' '14.60 title_close'; do
+for spec in '0.20 title_open' '3.40 farc_group' '7.90 flag_burning' '9.05 farc_armed' '13.00 farc_rifle' '14.60 title_close'; do
   set -- $spec
   ffmpeg -y -hide_banner -loglevel error -ss "$1" -i output/do_crime_dont_vote_reel_revision.mp4 -frames:v 1 -q:v 1 "work/frames/$2.jpg"
 done

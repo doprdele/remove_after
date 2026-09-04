@@ -12,34 +12,14 @@ probe_id() {
     -o /dev/null -w '%{url_effective}' "$endpoint" || true)
   printf '%s\n' "$final" > "probe/headers/${key}_redirect.txt"
 
-  local candidates=()
-  [[ "$final" == http* ]] && candidates+=("$final")
-  for fps in 24 25 30 50 60; do
-    candidates+=("https://videos.pexels.com/video-files/${id}/${id}-uhd_3840_2160_${fps}fps.mp4")
-    candidates+=("https://videos.pexels.com/video-files/${id}/${id}-hd_1920_1080_${fps}fps.mp4")
-    candidates+=("https://videos.pexels.com/video-files/${id}/${id}-hd_1280_720_${fps}fps.mp4")
-  done
-
-  local n=0 url code ctype size selected=''
-  : > "probe/headers/${key}_candidates.tsv"
-  for url in "${candidates[@]}"; do
-    n=$((n+1))
-    read -r code ctype size < <(curl -LIsS --retry 2 --connect-timeout 15 --max-time 45 \
-      -A 'Mozilla/5.0' -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$url" || echo '000 none 0')
-    printf '%s\t%s\t%s\t%s\n' "$code" "$ctype" "$size" "$url" >> "probe/headers/${key}_candidates.tsv"
-    if [[ "$code" =~ ^2 && "$ctype" == video/* ]]; then
-      selected="$url"
-      break
-    fi
-  done
-
-  if [[ -z "$selected" ]]; then
-    echo "No direct candidate for ${key}" >&2
+  if [[ "$final" != https://videos.pexels.com/*.mp4* ]]; then
+    echo "No direct Pexels MP4 redirect for ${key}: ${final}" >&2
     return 0
   fi
-  printf '%s\n' "$selected" > "probe/meta/${key}_selected_url.txt"
-  curl -LfsS --retry 6 --retry-delay 2 --connect-timeout 20 --max-time 900 \
-    -A 'Mozilla/5.0' "$selected" -o "probe/raw/${key}.mp4"
+  printf '%s\n' "$final" > "probe/meta/${key}_selected_url.txt"
+
+  curl -LfsS --retry 6 --retry-delay 2 --connect-timeout 20 --max-time 1200 \
+    -A 'Mozilla/5.0' "$final" -o "probe/raw/${key}.mp4"
   test -s "probe/raw/${key}.mp4"
 
   ffprobe -v error -show_entries \
@@ -60,8 +40,6 @@ probe_id robbers_gun_money 7232003
 probe_id robber_gun_briefcase 7231264
 probe_id robber_station_approach 8102800
 probe_id robber_getaway_run 8102795
-probe_id robber_planning_car 8102787
-probe_id robber_car_entry 8102788
 probe_id robbers_cash_gun_car 8102523
 
 find probe -type f -printf '%P\t%s bytes\n' | sort > probe/meta/manifest.txt

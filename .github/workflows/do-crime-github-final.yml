@@ -1,0 +1,73 @@
+name: do-crime-github-final
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+    paths:
+      - '.github/workflows/do-crime-github-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out render branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-do-crime-reel-20260903
+          fetch-depth: 1
+
+      - name: Install yt-dlp, FFmpeg and render dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow opencv-python-headless
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+          python --version
+
+      - name: Download, edit and validate final reel
+        shell: bash
+        run: |
+          set -o pipefail
+          python do-crime-actions/build_final.py 2>&1 | tee github_actions_final_build.log
+
+      - name: Add build log and workflow to reproduction bundle
+        run: |
+          set -euxo pipefail
+          cp github_actions_final_build.log gha-final/github_actions_final_build.log
+          cp .github/workflows/do-crime-github-final.yml gha-final/do-crime-github-final.yml
+          python - <<'PY'
+from pathlib import Path
+import zipfile
+zpath=Path('gha-final/do_crime_dont_vote_GITHUB_ACTIONS_repro.zip')
+with zipfile.ZipFile(zpath,'a',zipfile.ZIP_DEFLATED) as z:
+    z.write('github_actions_final_build.log','github_actions_final_build.log')
+    z.write('.github/workflows/do-crime-github-final.yml','do-crime-github-final.yml')
+PY
+
+      - name: Upload final artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-github-actions-final
+          path: gha-final/
+          compression-level: 0
+          retention-days: 5
+          if-no-files-found: error
+
+      - name: Commit finished deliverables to render branch
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config http.postBuffer 524288000
+          git add -f gha-final
+          git commit -m 'Add finished GitHub Actions robbery replacement reel' || exit 0
+          git push origin HEAD:chatgpt-do-crime-reel-20260903

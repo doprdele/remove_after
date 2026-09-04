@@ -1,0 +1,105 @@
+name: do-crime-bank-snippets
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-bank-corrected-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-replacements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg curl jq fonts-dejavu-core
+          ffmpeg -version | head -n 2
+
+      - name: Download three distinct watermark-free 4K robbery sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bank_replacements/{raw,clips,qc}
+          curl -LfsS --retry 8 --retry-delay 2 --connect-timeout 20 --max-time 1200 \
+            'https://videos.pexels.com/video-files/7232003/7232003-uhd_3840_2160_25fps.mp4' \
+            -o bank_replacements/raw/robbery_cash_gun.mp4
+          curl -LfsS --retry 8 --retry-delay 2 --connect-timeout 20 --max-time 1200 \
+            'https://videos.pexels.com/video-files/7231264/7231264-uhd_3840_2160_25fps.mp4' \
+            -o bank_replacements/raw/robbery_briefcase_gun.mp4
+          curl -LfsS --retry 8 --retry-delay 2 --connect-timeout 20 --max-time 1200 \
+            'https://videos.pexels.com/video-files/8102523/8102523-uhd_3840_2160_25fps.mp4' \
+            -o bank_replacements/raw/robbery_getaway_car.mp4
+
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          rows=[]
+          for p in sorted(Path('bank_replacements/raw').glob('*.mp4')):
+              d=json.loads(subprocess.check_output([
+                  'ffprobe','-v','error','-select_streams','v:0',
+                  '-show_entries','stream=width,height,r_frame_rate:format=duration,size',
+                  '-of','json',str(p)
+              ]))
+              s=d['streams'][0]
+              assert int(s['width']) >= 1920 and int(s['height']) >= 1080, (p,d)
+              rows.append({'file':p.name,'width':s['width'],'height':s['height'],
+                           'fps':s['r_frame_rate'],'duration':d['format']['duration'],
+                           'size':d['format']['size']})
+          Path('bank_replacements/qc/source_ffprobe.json').write_text(json.dumps(rows,indent=2))
+          print(json.dumps(rows,indent=2))
+          PY
+
+      - name: Render vertical 60 fps replacement clips
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          make_clip() {
+            local input="$1" start="$2" xpos="$3" output="$4"
+            ffmpeg -y -hide_banner -loglevel warning -ss "$start" -i "$input" \
+              -an -filter_complex "[0:v]crop=1216:2160:${xpos}:0,scale=1140:2027:flags=lanczos,crop=1080:1920:x='30+18*sin(33*t)':y='53+16*cos(29*t)',setpts=(PTS-STARTPTS)/1.22,fps=60,eq=contrast=1.31:saturation=1.42:brightness=-0.035,rgbashift=rh=10:bh=-10:rv=2:bv=-2,noise=alls=9:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@0.25,unsharp=5:5:0.75:5:5:0,trim=duration=1.5,setpts=PTS-STARTPTS,format=yuv420p[v]" \
+              -map '[v]' -frames:v 90 -r 60 -c:v libx264 -preset medium -crf 15 \
+              -profile:v high -level:v 4.2 -g 60 -keyint_min 60 -sc_threshold 0 \
+              -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+              -movflags +faststart "$output"
+          }
+
+          # Distinct 4K shots: masked robbers with cash, gun-and-briefcase heist,
+          # and armed getaway-car aftermath. No source overlays or broadcaster bugs.
+          make_clip bank_replacements/raw/robbery_cash_gun.mp4 3.0 1250 \
+            bank_replacements/clips/bank_robbery_1.mp4
+          make_clip bank_replacements/raw/robbery_briefcase_gun.mp4 9.0 1320 \
+            bank_replacements/clips/bank_robbery_2.mp4
+          make_clip bank_replacements/raw/robbery_getaway_car.mp4 18.8 1410 \
+            bank_replacements/clips/bank_robbery_3.mp4
+
+          for p in bank_replacements/clips/*.mp4; do
+            ffprobe -v error -count_frames -show_entries \
+              format=filename,duration,size:stream=codec_name,width,height,r_frame_rate,nb_read_frames \
+              -of json "$p" > "bank_replacements/qc/$(basename "$p").ffprobe.json"
+            ffmpeg -v error -i "$p" -f null -
+          done
+
+          ffmpeg -y -hide_banner -loglevel error \
+            -i bank_replacements/clips/bank_robbery_1.mp4 \
+            -i bank_replacements/clips/bank_robbery_2.mp4 \
+            -i bank_replacements/clips/bank_robbery_3.mp4 \
+            -filter_complex "[0:v]select='eq(n,36)',scale=360:640[a];[1:v]select='eq(n,36)',scale=360:640[b];[2:v]select='eq(n,36)',scale=360:640[c];[a][b][c]hstack=inputs=3" \
+            -frames:v 1 -q:v 2 bank_replacements/qc/replacement_board.jpg
+
+      - name: Upload robbery replacements
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-bank-replacements-4k-source
+          path: bank_replacements/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error

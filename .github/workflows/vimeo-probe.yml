@@ -1,0 +1,32 @@
+name: vimeo-probe
+on:
+  push:
+    branches: [chatgpt-do-crime-reel-20260903]
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe player configs
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          for id in 127193878 467357526 573011448 540209503 943225150; do
+            curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 "https://player.vimeo.com/video/${id}/config" -o "out/${id}.json" || true
+            if [ -s "out/${id}.json" ]; then
+              python - "$id" <<'PY'
+import json,sys
+id=sys.argv[1]
+d=json.load(open(f'out/{id}.json'))
+print(id,d.get('video',{}).get('title'))
+for p in d.get('request',{}).get('files',{}).get('progressive',[]):
+ print(p.get('height'),p.get('fps'),p.get('url'))
+PY
+            fi
+          done
+          tar -czf vimeo-probe.tgz out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vimeo-probe
+          path: out/
+          retention-days: 1

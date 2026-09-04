@@ -1,0 +1,43 @@
+name: do-crime-bank-flag-probe
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-bank-revision-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yt-dlp and FFmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq curl fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Build source review bundle
+        shell: bash
+        run: |
+          chmod +x chatgpt_do_crime/probe_bank_flag_sources.sh
+          chatgpt_do_crime/probe_bank_flag_sources.sh
+
+      - name: Upload candidate bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-bank-flag-probe
+          path: probe/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

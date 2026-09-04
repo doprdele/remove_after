@@ -25,69 +25,153 @@ jobs:
           yt-dlp --version
           ffmpeg -version | head -n 2
 
-      - name: Apply source and visual-QC corrections
+      - name: Apply the requested revision
+        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          p=Path('chatgpt_do_crime_revision/render_revision.sh')
-          s=p.read_text()
+          import re
 
-          s=s.replace(
-              "dm_section farc_walk x3ho0sq '20-28'\ndm_section farc_armed x4yv8jf '24-30'\ndm_section flag_burning x696jv6 '103-123'",
-              "dm_section farc_group x3ho0sq '43-45.2'\ndm_section farc_rifle x3ho0sq '20-28'\ndm_section farc_armed x4yv8jf '24-30'\ndm_section flag_burning x696jv6 '103-123'"
+          p = Path('chatgpt_do_crime_revision/render_revision.sh')
+          s = p.read_text()
+
+          # Replace the weak FARC insert with three legible armed views:
+          # a group moving through jungle, an armed lineup, and a rifle walk.
+          old_download = "dm_section farc_walk x3ho0sq '20-28'\ndm_section farc_armed x4yv8jf '24-30'\ndm_section flag_burning x696jv6 '103-123'"
+          new_download = "dm_section farc_group x3ho0sq '43-45.2'\ndm_section farc_rifle x3ho0sq '20-28'\ndm_section farc_armed x4yv8jf '24-30'\ndm_section flag_burning x696jv6 '103-123'"
+          if old_download not in s:
+              raise SystemExit('FARC source download block not found')
+          s = s.replace(old_download, new_download)
+
+          farc_norm = r'''# Armed group moving together: use the right side of the picture before the
+# lower third appears. This excludes the reporter and the Al Jazeera corner bug.
+ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_group.mp4 -an \
+  -vf "crop=192:288:320:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
+  -t 3 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_group.mp4
+
+# Rifle carriers walking through jungle: this wider crop preserves the long gun
+# and field gear while removing the broadcaster mark at lower left.
+ffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_rifle.mp4 -an \
+  -vf "crop=220:288:145:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \
+  -t 8 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_rifle.mp4
+'''
+          s, n = re.subn(
+              r'# Walking column:.*?work/src/farc_walk\.mp4\n',
+              farc_norm,
+              s,
+              count=1,
+              flags=re.S,
+          )
+          if n != 1:
+              raise SystemExit(f'FARC normalization replacement count={n}')
+
+          new_shots = r'''shots=[
+ ('cash_counting',0,0.25,2,0.92),
+ ('cash_bag',1,0.60,2,0.88),
+ ('farc_group',4,0.12,2,0.90),
+ ('tout',7,0.45,2,1.00),
+ ('cyber',2,0.40,1,1.12),
+ ('snow',3,1.10,2,1.18),
+ ('flag_burning',8,0.60,2,0.88),
+ ('farc_armed',5,2.05,2,0.84),
+ ('tout',7,4.10,1,0.96),
+ ('cyber',2,8.70,2,1.04),
+ ('cash_counting',0,3.10,1,1.10),
+ ('farc_rifle',6,6.00,2,0.88),
+ ('flag_burning',8,7.10,1,0.92),
+]
+parts=[]'''
+          s, n = re.subn(r'shots=\[.*?\]\nparts=\[\]', new_shots, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'shot timeline replacement count={n}')
+
+          # New stream indexes after adding one FARC source.
+          s = s.replace(
+              "parts.append(f'[9:v]trim=duration={TITLE_OPEN:.9f}",
+              "parts.append(f'[10:v]trim=duration={TITLE_OPEN:.9f}",
+          )
+          s = s.replace(
+              "parts.append(f'[10:v]trim=duration={TITLE_CLOSE:.9f}",
+              "parts.append(f'[11:v]trim=duration={TITLE_CLOSE:.9f}",
           )
 
-          old='''# Walking column: exact 9:16 central crop eliminates the Al Jazeera corner bug.\nffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_walk.mp4 -an \\\n            -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \\\n            -t 8 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_walk.mp4\n'''
-          new='''# Armed column: right-side crop excludes the reporter and Al Jazeera logo while\n# retaining several armed members moving together through the jungle.\nffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_group.mp4 -an \\\n            -vf "crop=192:288:320:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \\\n            -t 3 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_group.mp4\n\n# Rifle walk: wider central crop excludes the bottom-left broadcaster bug and\n# preserves the visible rifle and field gear.\nffmpeg -y -hide_banner -loglevel warning -stream_loop -1 -i work/raw/farc_rifle.mp4 -an \\\n            -vf "crop=220:288:145:0,scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p" \\\n            -t 8 -c:v libx264 -preset veryfast -crf 16 -profile:v high work/src/farc_rifle.mp4\n'''
-          if old not in s: raise SystemExit('FARC normalization block not found')
-          s=s.replace(old,new)
+          # Preserve the harsh style, but make archival evidence substantially more
+          # readable than the first version by reducing shake, zoom, split and noise.
+          new_loop = r'''for i,(name,inp,cue,beats,speed) in enumerate(shots):
+    dur=beats*B
+    source_dur=dur*speed
+    archival=name in {'farc_group','farc_armed','farc_rifle','flag_burning'}
+    zoom=(1.020+(i%2)*0.008) if archival else (1.045+(i%4)*0.018)
+    shake_x=4 if archival else 10
+    shake_y=3 if archival else 8
+    contrast=1.14 if archival else 1.23+(i%3)*0.035
+    saturation=1.25 if archival else 1.34+(i%4)*0.05
+    brightness=0.005 if archival else -0.025
+    rgb=5 if archival else 8+(i%3)*3
+    rgbv=1 if archival else 2
+    grain=5 if archival else 8+(i%4)*2
+    scan=0.17 if archival else 0.24
+    sw=round(1080*zoom); sh=round(1920*zoom)
+    maxx=sw-1080; maxy=sh-1920
+    xbase=maxx/2; ybase=maxy/2
+    chain=(f'[{inp}:v]trim=start={cue:.4f}:end={cue+source_dur:.4f},'
+           f'setpts=(PTS-STARTPTS)/{speed:.6f},fps=60,scale={sw}:{sh}:flags=bicubic,'
+           f"crop=1080:1920:x='{xbase:.2f}+min({maxx/3:.2f}\\, {shake_x})*sin(31*t+{i})':"
+           f"y='{ybase:.2f}+min({maxy/3:.2f}\\, {shake_y})*cos(27*t+{i})',setsar=1,")
+    if i in {4,7,10}:
+        chain+='loop=loop=1:size=4:start=28,'
+    chain+=(f'trim=duration={dur:.9f},setpts=PTS-STARTPTS,'
+            f'eq=contrast={contrast:.3f}:saturation={saturation:.3f}:brightness={brightness:.3f},'
+            f'rgbashift=rh={rgb}:bh={-rgb}:rv={rgbv}:bv={-rgbv},'
+            f'noise=alls={grain}:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@{scan:.2f},'
+            f'unsharp=5:5:0.75:5:5:0,format=yuv420p[s{i}]')
+    parts.append(chain)
+    labels.append(f'[s{i}]')
+'''
+          s, n = re.subn(
+              r'for i,\(name,inp,cue,beats,speed\) in enumerate\(shots\):.*?labels\.append\(f\'\[s\{i\}\]\'\)\n',
+              new_loop,
+              s,
+              count=1,
+              flags=re.S,
+          )
+          if n != 1:
+              raise SystemExit(f'effect-loop replacement count={n}')
 
-          oldshots="""shots=[\n ('cash_counting',0,0.25,2,0.92),\n ('cash_bag',1,0.60,2,0.88),\n ('farc_walk',4,0.70,2,0.92),\n ('tout',6,0.45,2,1.00),\n ('cyber',2,0.40,1,1.12),\n ('snow',3,1.10,2,1.18),\n ('flag_burning',7,0.60,2,0.88),\n ('farc_armed',5,0.10,2,0.84),\n ('tout',6,4.10,1,0.96),\n ('cyber',2,8.70,2,1.04),\n ('cash_counting',0,3.10,1,1.10),\n ('farc_walk',4,3.00,2,0.88),\n ('flag_burning',7,7.10,1,0.92),\n]"""
-          newshots="""shots=[\n ('cash_counting',0,0.25,2,0.92),\n ('cash_bag',1,0.60,2,0.88),\n ('farc_group',4,0.12,2,0.90),\n ('tout',7,0.45,2,1.00),\n ('cyber',2,0.40,1,1.12),\n ('snow',3,1.10,2,1.18),\n ('flag_burning',8,0.60,2,0.88),\n ('farc_armed',5,2.05,2,0.84),\n ('tout',7,4.10,1,0.96),\n ('cyber',2,8.70,2,1.04),\n ('cash_counting',0,3.10,1,1.10),\n ('farc_rifle',6,6.00,2,0.88),\n ('flag_burning',8,7.10,1,0.92),\n]"""
-          if oldshots not in s: raise SystemExit('shot array not found')
-          s=s.replace(oldshots,newshots)
-
-          s=s.replace("parts.append(f'[9:v]trim=duration={TITLE_OPEN:.9f}", "parts.append(f'[10:v]trim=duration={TITLE_OPEN:.9f}")
-          s=s.replace("parts.append(f'[10:v]trim=duration={TITLE_CLOSE:.9f}", "parts.append(f'[11:v]trim=duration={TITLE_CLOSE:.9f}")
-
-          zoom_line="    zoom=1.045+(i%4)*0.018\n"
-          controls="""    archival=name in {'farc_group','farc_armed','farc_rifle','flag_burning'}\n    zoom=(1.020+(i%2)*0.008) if archival else (1.045+(i%4)*0.018)\n    shake_x=4 if archival else 10\n    shake_y=3 if archival else 8\n    contrast=1.14 if archival else 1.23+(i%3)*0.035\n    saturation=1.25 if archival else 1.34+(i%4)*0.05\n    brightness=0.005 if archival else -0.025\n    rgb=5 if archival else 8+(i%3)*3\n    rgbv=1 if archival else 2\n    grain=5 if archival else 8+(i%4)*2\n    scan=0.17 if archival else 0.24\n"""
-          if zoom_line not in s: raise SystemExit('effect-control insertion point not found')
-          s=s.replace(zoom_line,controls)
-          s=s.replace("min({maxx/3:.2f}\\\\,10)*sin", "min({maxx/3:.2f}\\\\,{shake_x})*sin")
-          s=s.replace("min({maxy/3:.2f}\\\\,8)*cos", "min({maxy/3:.2f}\\\\,{shake_y})*cos")
-
-          oldfx="""            f'eq=contrast={1.23+(i%3)*0.035:.3f}:saturation={1.34+(i%4)*0.05:.3f}:brightness=-0.025,'\n            f'rgbashift=rh={8+(i%3)*3}:bh={-8-(i%3)*3}:rv=2:bv=-2,'\n            f'noise=alls={8+(i%4)*2}:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@0.24,'"""
-          newfx="""            f'eq=contrast={contrast:.3f}:saturation={saturation:.3f}:brightness={brightness:.3f},'\n            f'rgbashift=rh={rgb}:bh={-rgb}:rv={rgbv}:bv={-rgbv},'\n            f'noise=alls={grain}:allf=t+u,drawgrid=w=1080:h=4:t=1:c=black@{scan:.2f},'"""
-          if oldfx not in s: raise SystemExit('effect block not found')
-          s=s.replace(oldfx,newfx)
-
-          oldinputs="""  -i work/src/farc_walk.mp4 \\\n  -i work/src/farc_armed.mp4 \\\n  -i work/src/tout.mp4 \\\n  -i work/src/flag_burning.mp4 \\\n  -i work/audio/raya_master.m4a \\\n  -loop 1 -framerate 60 -i work/title/title0.png \\\n  -loop 1 -framerate 60 -i work/title/title1.png \\\n  -filter_complex_script work/filter.txt \\\n  -map '[outv]' -map 8:a:0"""
-          newinputs="""  -i work/src/farc_group.mp4 \\\n  -i work/src/farc_armed.mp4 \\\n  -i work/src/farc_rifle.mp4 \\\n  -i work/src/tout.mp4 \\\n  -i work/src/flag_burning.mp4 \\\n  -i work/audio/raya_master.m4a \\\n  -loop 1 -framerate 60 -i work/title/title0.png \\\n  -loop 1 -framerate 60 -i work/title/title1.png \\\n  -filter_complex_script work/filter.txt \\\n  -map '[outv]' -map 9:a:0"""
-          if oldinputs not in s: raise SystemExit('input block not found')
-          s=s.replace(oldinputs,newinputs)
-
-          s=s.replace("for k in cash_counting cash_bag cyber snow farc_walk farc_armed tout flag_burning; do", "for k in cash_counting cash_bag cyber snow farc_group farc_armed farc_rifle tout flag_burning; do")
-          s=s.replace("for spec in '0.20 title_open' '2.20 farc_walk' '6.00 flag_burning' '7.40 farc_armed' '14.60 title_close'; do", "for spec in '0.20 title_open' '3.40 farc_group' '7.90 flag_burning' '9.05 farc_armed' '13.00 farc_rifle' '14.60 title_close'; do")
-          s=s.replace('do_crime_dont_vote_reel_revision.mp4','do_crime_dont_vote_reel_revision_v2.mp4')
+          s = s.replace(
+              '  -i work/src/farc_walk.mp4 \\\n  -i work/src/farc_armed.mp4 \\',
+              '  -i work/src/farc_group.mp4 \\\n  -i work/src/farc_armed.mp4 \\\n  -i work/src/farc_rifle.mp4 \\',
+          )
+          s = s.replace("-map '[outv]' -map 8:a:0", "-map '[outv]' -map 9:a:0")
+          s = s.replace(
+              'for k in cash_counting cash_bag cyber snow farc_walk farc_armed tout flag_burning; do',
+              'for k in cash_counting cash_bag cyber snow farc_group farc_armed farc_rifle tout flag_burning; do',
+          )
+          s = s.replace(
+              "for spec in '0.20 title_open' '2.20 farc_walk' '6.00 flag_burning' '7.40 farc_armed' '14.60 title_close'; do",
+              "for spec in '0.20 title_open' '3.40 farc_group' '7.90 flag_burning' '9.05 farc_armed' '13.00 farc_rifle' '14.60 title_close'; do",
+          )
+          s = s.replace('do_crime_dont_vote_reel_revision.mp4', 'do_crime_dont_vote_reel_revision_v2.mp4')
 
           p.write_text(s)
           assert "('farc_group',4,0.12,2,0.90)" in s
           assert "('farc_rifle',6,6.00,2,0.88)" in s
           assert "archival=name in" in s
           assert "-map 9:a:0" in s
+          assert "work/src/farc_rifle.mp4" in s
           PY
           bash -n chatgpt_do_crime_revision/render_revision.sh
 
-      - name: Render revised longer-shot edit
+      - name: Render the longer-shot revision
         shell: bash
         run: |
           chmod +x chatgpt_do_crime_revision/render_revision.sh
           set -o pipefail
           bash chatgpt_do_crime_revision/render_revision.sh 2>&1 | tee revision_v2_build.log
 
-      - name: Create and validate iPhone-compatible copy
+      - name: Create and validate the iPhone-compatible copy
         run: |
+          set -euxo pipefail
           ffmpeg -y -hide_banner -loglevel warning \
             -i output/do_crime_dont_vote_reel_revision_v2.mp4 \
             -vf 'fps=30,setsar=1,format=yuv420p' -t 15 -frames:v 450 \
@@ -111,24 +195,24 @@ jobs:
           print('IPHONE V2 QC PASSED')
           PY
 
-      - name: Package reproducible build
+      - name: Package the reproducible revision
         run: |
           cp chatgpt_do_crime_revision/render_revision.sh output/render_revision_v2.sh
           cp revision_v2_build.log output/revision_v2_build.log
           cat > output/README_V2.txt <<'EOF'
           DO CRIME. DON'T VOTE — revision v2
 
-          - Two full-screen title cards total: opening and closing.
+          - Exactly two full-screen title cards: opening and closing.
           - Thirteen footage shots, mostly two beats / about 1.23 seconds each.
-          - Cash is visible in both opulence sources; watch-only source removed.
-          - Armed FARC group, armed jungle lineup, and clear rifle walk.
-          - U.S.-flag material is visibly burning in both protest inserts.
-          - Previously approved Tout Va Bien supermarket sequence retained.
-          - Source logos and subtitle/lower-third areas removed by portrait crops.
-          - FARC/flag inserts use reduced noise, channel split, shake, and zoom for readability.
+          - Cash is visible in both opulence sources; the watch-only source is removed.
+          - Armed FARC group movement, an armed jungle lineup, and a clear rifle walk.
+          - The U.S.-flag material is visibly burning in both protest inserts.
+          - The previously approved Tout Va Bien supermarket sequence is retained.
+          - Broadcaster logos, subtitles and lower-thirds are excluded by portrait crops.
+          - Archival inserts receive milder shake, grain and RGB splitting for legibility.
 
-          Master: 1080x1920, 60 fps, H.264 High, AAC, 15 seconds.
-          iPhone copy: 1080x1920, 30 fps, H.264 High, AAC, 15 seconds.
+          Master: 1080x1920, 60 fps, H.264 High, AAC, exactly 15 seconds.
+          iPhone copy: 1080x1920, 30 fps, H.264 High, AAC, exactly 15 seconds.
           EOF
           zip -9 -j output/do_crime_dont_vote_reel_revision_v2_repro.zip \
             output/render_revision_v2.sh output/filter_complex.txt output/timeline.txt \

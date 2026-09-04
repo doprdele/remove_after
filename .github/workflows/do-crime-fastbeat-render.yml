@@ -1,0 +1,122 @@
+name: do-crime-fastbeat-render
+
+on:
+  push:
+    branches: [chatgpt-do-crime-fastbeat-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yt-dlp, FFmpeg, and title dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl fonts-dejavu-core fonts-gfs-didot >/dev/null
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" pillow >/dev/null
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Build faster-section renderer
+        run: |
+          set -euxo pipefail
+          python -m py_compile chatgpt_do_crime_revision/patch_fastbeat.py
+          python chatgpt_do_crime_revision/patch_fastbeat.py
+          bash -n chatgpt_do_crime_revision/render_fastbeat.sh
+
+      - name: Render faster-beat revision
+        shell: bash
+        run: |
+          set -o pipefail
+          bash chatgpt_do_crime_revision/render_fastbeat.sh 2>&1 | tee fastbeat_build.log
+
+      - name: Create delivery masters and validate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          master=output/do_crime_dont_vote_reel_fastbeat.mp4
+          test -s "$master"
+          cp "$master" output/do_crime_dont_vote_reel_FASTBEAT_60fps.mp4
+
+          ffmpeg -y -hide_banner -loglevel warning -i "$master" \
+            -vf 'fps=30,setsar=1,format=yuv420p' -t 15 -frames:v 450 \
+            -c:v libx264 -preset medium -crf 18 -profile:v high -level:v 4.1 \
+            -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 -movflags +faststart \
+            output/do_crime_dont_vote_reel_FASTBEAT_iPhone_30fps.mp4
+
+          for f in output/do_crime_dont_vote_reel_FASTBEAT_60fps.mp4 output/do_crime_dont_vote_reel_FASTBEAT_iPhone_30fps.mp4; do
+            ffmpeg -v error -i "$f" -f null -
+          done
+
+          ffprobe -v error -count_frames -show_entries \
+            format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,duration,nb_frames,nb_read_frames \
+            -of json output/do_crime_dont_vote_reel_FASTBEAT_60fps.mp4 > output/FASTBEAT_60fps_ffprobe.json
+          ffprobe -v error -count_frames -show_entries \
+            format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,duration,nb_frames,nb_read_frames \
+            -of json output/do_crime_dont_vote_reel_FASTBEAT_iPhone_30fps.mp4 > output/FASTBEAT_iPhone_ffprobe.json
+
+          python - <<'PY'
+          import json
+          checks=[
+            ('output/FASTBEAT_60fps_ffprobe.json',60,900),
+            ('output/FASTBEAT_iPhone_ffprobe.json',30,450),
+          ]
+          for path,fps,frames in checks:
+              d=json.load(open(path)); ss={s['codec_type']:s for s in d['streams']}; v=ss['video']; a=ss['audio']
+              assert abs(float(d['format']['duration'])-15)<.025,d
+              assert (v['width'],v['height'])==(1080,1920),v
+              assert v['codec_name']=='h264' and v['pix_fmt']=='yuv420p',v
+              assert v['r_frame_rate']==f'{fps}/1',v
+              assert int(v.get('nb_read_frames') or v.get('nb_frames'))==frames,v
+              assert a['codec_name']=='aac' and a['sample_rate']=='48000',a
+          open('output/FASTBEAT_QC_PASSED.txt','w').write('PASS\n')
+          print('FASTBEAT DELIVERY QC PASSED')
+          PY
+
+          cp work/qc/final_contact_sheet.jpg output/FASTBEAT_contact_sheet.jpg
+          cp work/qc/timeline.txt output/FASTBEAT_timeline.txt
+          cat > output/FASTBEAT_README.txt <<'EOF'
+          DO CRIME. DON'T VOTE — faster-beat revision
+
+          Audio range: 14.740-29.740 seconds of the same Raya (Slowed) preview.
+          This later range has the stronger double-time percussion passage.
+          Picture grid: 49 subdivisions over 15 seconds, approximately 196 BPM.
+          Shot duration: 3-4 subdivisions, approximately 0.92-1.22 seconds.
+          Titles: exactly two, opening and closing.
+          Footage/content choices from the approved revised cut are retained.
+
+          Master: 1080x1920, 60 fps, H.264 High, AAC, exactly 15 seconds.
+          iPhone copy: 1080x1920, 30 fps, H.264 High, AAC, exactly 15 seconds.
+          No Runway material was used.
+          EOF
+
+          zip -9 -j output/do_crime_dont_vote_reel_FASTBEAT_repro.zip \
+            chatgpt_do_crime_revision/render_revision.sh \
+            chatgpt_do_crime_revision/patch_fastbeat.py \
+            chatgpt_do_crime_revision/render_fastbeat.sh \
+            output/filter_complex.txt output/FASTBEAT_timeline.txt \
+            output/FASTBEAT_60fps_ffprobe.json output/FASTBEAT_iPhone_ffprobe.json \
+            output/FASTBEAT_README.txt output/FASTBEAT_QC_PASSED.txt >/dev/null
+
+      - name: Upload faster-beat reel and QC
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-fastbeat
+          path: |
+            output/
+            work/qc/
+            work/frames/
+            fastbeat_build.log
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn

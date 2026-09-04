@@ -1,0 +1,94 @@
+name: do-crime-revision-render
+
+on:
+  push:
+    branches: [chatgpt-do-crime-revision-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yt-dlp, FFmpeg, and title dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl fonts-dejavu-core fonts-gfs-didot >/dev/null
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" pillow >/dev/null
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Render revised two-beat edit
+        shell: bash
+        run: |
+          chmod +x chatgpt_do_crime_revision/render_revision.sh
+          set -o pipefail
+          bash chatgpt_do_crime_revision/render_revision.sh 2>&1 | tee revision_build.log
+
+      - name: Create iPhone-compatible 30 fps copy
+        run: |
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i output/do_crime_dont_vote_reel_revision.mp4 \
+            -vf 'fps=30,setsar=1,format=yuv420p' -t 15 -frames:v 450 \
+            -c:v libx264 -preset medium -crf 18 -profile:v high -level:v 4.1 \
+            -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 -movflags +faststart \
+            output/do_crime_dont_vote_reel_revision_iPhone.mp4
+          ffmpeg -v error -i output/do_crime_dont_vote_reel_revision_iPhone.mp4 -f null -
+          ffprobe -v error -count_frames -show_entries \
+            format=duration,size:stream=codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,sample_rate,channels,nb_read_frames \
+            -of json output/do_crime_dont_vote_reel_revision_iPhone.mp4 > output/iPhone_ffprobe.json
+          python - <<'PY'
+          import json
+          d=json.load(open('output/iPhone_ffprobe.json')); ss={s['codec_type']:s for s in d['streams']}; v=ss['video']; a=ss['audio']
+          assert abs(float(d['format']['duration'])-15)<.025,d
+          assert (v['width'],v['height'])==(1080,1920),v
+          assert v['codec_name']=='h264' and v['r_frame_rate']=='30/1' and int(v['nb_read_frames'])==450,v
+          assert a['codec_name']=='aac' and a['sample_rate']=='48000',a
+          print('IPHONE QC PASSED')
+          PY
+
+      - name: Package reproducible build
+        run: |
+          cp chatgpt_do_crime_revision/render_revision.sh output/render_revision.sh
+          cp revision_build.log output/revision_build.log
+          cat > output/README.txt <<'EOF'
+          DO CRIME. DON'T VOTE — revision
+
+          Changes in this revision:
+          - two title cards total
+          - mostly two-beat moving shots (~1.23 seconds)
+          - armed FARC column and armed jungle group
+          - cash-counting and bag-of-cash opulence shots only; watch-only shot removed
+          - visibly burning U.S.-flag protest footage
+          - approved Tout Va Bien supermarket sequence retained
+          - source corners/lower thirds cropped before effects
+
+          Master: 1080x1920, 60 fps, H.264 High, AAC, 15.000 seconds
+          iPhone copy: 1080x1920, 30 fps, H.264 High, AAC, 15.000 seconds
+          EOF
+          zip -9 -j output/do_crime_dont_vote_reel_revision_repro.zip \
+            chatgpt_do_crime_revision/render_revision.sh \
+            output/filter_complex.txt output/timeline.txt output/final_ffprobe.json \
+            output/iPhone_ffprobe.json output/README.txt >/dev/null
+
+      - name: Upload revised reel and QC package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-revision
+          path: |
+            output/
+            work/qc/
+            work/frames/
+            revision_build.log
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn

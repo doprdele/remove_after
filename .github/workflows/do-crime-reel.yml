@@ -1,0 +1,38 @@
+name: do-crime-reel
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install media toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core fonts-gfs-didot curl
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" pillow
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+      - name: Render reel
+        run: bash chatgpt_do_crime/do_crime_render.sh
+      - name: Upload output and QC
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-reel
+          path: |
+            output/
+            work/qc/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: warn

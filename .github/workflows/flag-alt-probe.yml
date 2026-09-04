@@ -1,0 +1,54 @@
+name: flag-alt-probe
+
+on:
+  push:
+    branches: [chatgpt-do-crime-reel-20260903]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+      - name: Download candidate raw footage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out/video out/contact out/meta
+          get() {
+            key="$1"; id="$2"; end="$3"
+            rm -f "out/video/${key}."* 2>/dev/null || true
+            yt-dlp --no-playlist --retries 8 --fragment-retries 8 --socket-timeout 45 \
+              --download-sections "*0-${end}" --force-keyframes-at-cuts \
+              -f 'bestvideo+bestaudio/best' --merge-output-format mp4 \
+              -o "out/video/${key}.%(ext)s" "https://www.dailymotion.com/video/${id}"
+            src=$(find out/video -maxdepth 1 -type f -name "${key}.*" ! -name '*.part' ! -name '*.info.json' | head -n1)
+            test -s "$src"
+            [ "$src" = "out/video/${key}.mp4" ] || mv "$src" "out/video/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/video/${key}.mp4" > "out/meta/${key}.json"
+            ffmpeg -y -hide_banner -loglevel error -i "out/video/${key}.mp4" \
+              -vf "fps=1/3,scale=240:135:force_original_aspect_ratio=decrease,pad=240:135:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=15:fontcolor=white:borderw=2:bordercolor=black,tile=6x6:padding=3:margin=3:color=black" \
+              -frames:v 1 -q:v 2 "out/contact/${key}.jpg"
+          }
+          get anti_ice xa1onmu 108
+          get white_house x9phdo2 90
+          get minneapolis x9xdcdk 105
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/meta/manifest.txt
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flag-alt-probe
+          path: out/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: warn

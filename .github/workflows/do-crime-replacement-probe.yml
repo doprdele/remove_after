@@ -1,0 +1,183 @@
+name: do-crime-replacement-probe
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+    paths:
+      - '.github/workflows/do-crime-replacement-probe.yml'
+      - 'do-crime-probe-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Search, download and build visual probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe/{search,metadata,clips,sheets,frames}
+
+          YTDLP=(yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 8 --fragment-retries 8 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome)
+
+          cat > probe/queries.tsv <<'EOF'
+          robbery_dark_knight	The Dark Knight bank robbery scene 1080p official clip
+          robbery_heat	Heat bank robbery scene 1080p official clip
+          robbery_town	The Town bank robbery scene 1080p official clip
+          robbery_inside_man	Inside Man bank robbery scene 1080p official clip
+          robbery_point_break	Point Break bank robbery scene 1080p official clip
+          robbery_cctv	armed bank robbery security footage 1080p no watermark
+          flag_ignite	protesters light American flag on fire raw footage 1080p
+          flag_burn	American flag burning protest demonstrators raw video 1080p
+          flag_left	left wing protesters burn American flag raw footage
+          EOF
+
+          : > probe/search/all_results.tsv
+          while IFS=$'\t' read -r key query; do
+            echo "SEARCH $key :: $query"
+            yt-dlp "${YTDLP[@]}" --flat-playlist --playlist-end 8 \
+              --print "${key}\t%(id)s\t%(title)s\t%(duration)s\t%(uploader)s" \
+              "ytsearch8:${query}" > "probe/search/${key}.tsv" || true
+            cat "probe/search/${key}.tsv" >> probe/search/all_results.tsv
+          done < probe/queries.tsv
+
+          python - <<'PY'
+from pathlib import Path
+rows=[]
+seen=set()
+for line in Path('probe/search/all_results.tsv').read_text(errors='ignore').splitlines():
+    p=line.split('\t')
+    if len(p)<5:
+        continue
+    key,vid,title,duration,uploader=p[:5]
+    if not vid or vid in seen:
+        continue
+    try:
+        dur=float(duration or 0)
+    except Exception:
+        dur=0
+    if dur and not (15 <= dur <= 1200):
+        continue
+    seen.add(vid)
+    rows.append((key,vid,title,dur,uploader))
+# Keep up to 3 per query family, and at most 24 total.
+counts={}
+out=[]
+for row in rows:
+    key=row[0]
+    if counts.get(key,0)>=3:
+        continue
+    counts[key]=counts.get(key,0)+1
+    out.append(row)
+    if len(out)>=24:
+        break
+Path('probe/candidates.tsv').write_text('\n'.join('\t'.join(map(str,r)) for r in out)+'\n')
+print(f'Selected {len(out)} candidates')
+PY
+
+          download_candidate() {
+            local key="$1" id="$2" title="$3" duration="$4" uploader="$5"
+            local safe="${key}_${id}"
+            local url="https://www.youtube.com/watch?v=${id}"
+            echo "PROBE ${safe} :: ${title}"
+
+            if ! yt-dlp "${YTDLP[@]}" --dump-single-json "$url" > "probe/metadata/${safe}.info.json"; then
+              echo "metadata failed for $id" >&2
+              return 0
+            fi
+            local maxh
+            maxh=$(jq '[.formats[]? | select(.vcodec != "none") | (.height // 0)] | max // 0' "probe/metadata/${safe}.info.json")
+            echo -e "${safe}\t${maxh}\t${duration}\t${title}\t${uploader}" >> probe/metadata/summary.tsv
+            if [[ "$maxh" -lt 1080 ]]; then
+              echo "Skipping ${safe}: only ${maxh}p"
+              return 0
+            fi
+
+            local end=150
+            python - "$duration" > /tmp/end.txt <<'PY'
+import sys
+try: d=float(sys.argv[1])
+except: d=150
+print(max(12,min(150,d)))
+PY
+            end=$(cat /tmp/end.txt)
+
+            rm -f "probe/clips/${safe}."* 2>/dev/null || true
+            if ! yt-dlp "${YTDLP[@]}" \
+              --download-sections "*0-${end}" --force-keyframes-at-cuts \
+              -f 'bestvideo[height>=1080][height<=1440][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height>=1080][height<=1440]+bestaudio/best[height>=1080]' \
+              --merge-output-format mp4 -o "probe/clips/${safe}.%(ext)s" "$url"; then
+              echo "download failed for $id" >&2
+              return 0
+            fi
+            local clip
+            clip=$(find probe/clips -maxdepth 1 -type f -name "${safe}.*" ! -name '*.part' ! -name '*.ytdl' | head -n1)
+            test -s "$clip" || return 0
+
+            ffmpeg -y -hide_banner -loglevel error -i "$clip" \
+              -vf "fps=1/4,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=7:y=7:fontsize=18:fontcolor=white:borderw=2:bordercolor=black,tile=5x8:padding=3:margin=3:color=black" \
+              -frames:v 1 -q:v 2 "probe/sheets/${safe}.jpg" || true
+
+            ffmpeg -y -hide_banner -loglevel error -ss 4 -i "$clip" -frames:v 1 -q:v 2 "probe/frames/${safe}_04s.jpg" || true
+            ffmpeg -y -hide_banner -loglevel error -ss 16 -i "$clip" -frames:v 1 -q:v 2 "probe/frames/${safe}_16s.jpg" || true
+            rm -f "$clip"
+          }
+
+          : > probe/metadata/summary.tsv
+          count=0
+          while IFS=$'\t' read -r key id title duration uploader; do
+            count=$((count+1))
+            download_candidate "$key" "$id" "$title" "$duration" "$uploader"
+          done < probe/candidates.tsv
+
+          python - <<'PY'
+from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+files=sorted(Path('probe/sheets').glob('*.jpg'))
+if not files:
+    raise SystemExit('No contact sheets were produced')
+font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',20)
+thumbs=[]
+for p in files:
+    im=Image.open(p).convert('RGB')
+    im.thumbnail((800,1160))
+    card=Image.new('RGB',(820,1220),'#111111')
+    card.paste(im,((820-im.width)//2,48))
+    d=ImageDraw.Draw(card)
+    d.text((12,10),p.stem,font=font,fill='white')
+    thumbs.append(card)
+cols=3
+rows=(len(thumbs)+cols-1)//cols
+board=Image.new('RGB',(cols*820,rows*1220),'black')
+for i,im in enumerate(thumbs):
+    board.paste(im,((i%cols)*820,(i//cols)*1220))
+board.save('probe/MASTER_CONTACT_BOARD.jpg',quality=90)
+PY
+
+          find probe -type f -printf '%P\t%s bytes\n' | sort > probe/file_manifest.txt
+
+      - name: Upload replacement probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-replacement-probe
+          path: probe/
+          compression-level: 6
+          retention-days: 2
+          if-no-files-found: error

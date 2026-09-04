@@ -1,0 +1,96 @@
+name: do-crime-revision-probe
+
+on:
+  push:
+    branches: [chatgpt-do-crime-revision-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install media tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Download candidate footage and make contact sheets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out/video out/contact out/meta
+
+          get_dm() {
+            key="$1"; id="$2"; section="${3:-}"
+            rm -f "out/video/${key}."* 2>/dev/null || true
+            args=(--no-playlist --retries 8 --fragment-retries 8 --socket-timeout 45 -f 'bestvideo+bestaudio/best' --merge-output-format mp4)
+            if [ -n "$section" ]; then
+              args+=(--download-sections "*${section}" --force-keyframes-at-cuts)
+            fi
+            yt-dlp "${args[@]}" -o "out/video/${key}.%(ext)s" "https://www.dailymotion.com/video/${id}"
+            src=$(find out/video -maxdepth 1 -type f -name "${key}.*" ! -name '*.part' ! -name '*.info.json' | head -n1)
+            test -s "$src"
+            [ "$src" = "out/video/${key}.mp4" ] || mv "$src" "out/video/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/video/${key}.mp4" > "out/meta/${key}.json"
+
+            dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "out/video/${key}.mp4")
+            pages=$(python - "$dur" <<'PY'
+import math,sys
+print(max(1, math.ceil(float(sys.argv[1])/60)))
+PY
+            )
+            for ((page=0; page<pages; page++)); do
+              start=$((page*60))
+              ffmpeg -y -hide_banner -loglevel error -ss "$start" -t 60 -i "out/video/${key}.mp4" \
+                -vf "fps=1,scale=300:169:force_original_aspect_ratio=decrease,pad=300:169:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=5:y=5:fontsize=16:fontcolor=white:borderw=2:bordercolor=black,tile=6x10:padding=3:margin=3:color=black" \
+                -frames:v 1 -q:v 2 "out/contact/${key}_wide_p${page}.jpg" || true
+              ffmpeg -y -hide_banner -loglevel error -ss "$start" -t 60 -i "out/video/${key}.mp4" \
+                -vf "fps=1,crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=180:320,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=6x10:padding=3:margin=3:color=black" \
+                -frames:v 1 -q:v 2 "out/contact/${key}_portrait_p${page}.jpg" || true
+            done
+          }
+
+          # Candidate descriptions:
+          # xa7fukw: captured FARC footage; transcript explicitly says armed guerrillas walking.
+          # x3ho0sq: inside a large FARC rebel camp.
+          # xa7fyc0: seized FARC training footage.
+          # x4yv8jf: walk-through of an armed FARC camp.
+          get_dm farc_walk xa7fukw
+          get_dm farc_camp x3ho0sq
+          get_dm farc_training xa7fyc0
+          get_dm farc_bbc x4yv8jf
+
+          # Giant American flag visibly burning during an anti-Trump Manila protest.
+          get_dm flag_burning x696jv6 '85-125'
+
+          # Native 4K portrait source: person in black holding a luxury-style bag full of cash.
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i 'https://videos.pexels.com/video-files/6266293/6266293-uhd_2160_3840_25fps.mp4' \
+            -t 20 -an -vf 'scale=1080:1920:flags=lanczos,setsar=1,fps=60,format=yuv420p' \
+            -c:v libx264 -preset veryfast -crf 17 -profile:v high -movflags +faststart out/video/cash_bag.mp4
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json out/video/cash_bag.mp4 > out/meta/cash_bag.json
+          ffmpeg -y -hide_banner -loglevel error -i out/video/cash_bag.mp4 \
+            -vf "fps=2,scale=180:320,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=5x8:padding=3:margin=3:color=black" \
+            -frames:v 1 -q:v 2 out/contact/cash_bag.jpg
+
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/meta/manifest.txt
+
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-revision-probe
+          path: out/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error

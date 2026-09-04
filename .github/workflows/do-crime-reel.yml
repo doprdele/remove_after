@@ -23,12 +23,8 @@ jobs:
           python -m pip install --upgrade "yt-dlp[default]" pillow
           yt-dlp --version
           ffmpeg -version | head -n 2
-      - name: Remove generated imagery from build
-        shell: bash
-        run: |
-          sed -i "/work\/raw\/farc1.png/c\fetch 'https://commons.wikimedia.org/wiki/Special:Redirect/file/FARC_guerrillas_during_the_Caguan_peace_talks_(1998-2002).jpg' work/raw/farc1.png" chatgpt_do_crime/do_crime_render.sh
-          sed -i "/work\/raw\/farc2.png/c\fetch 'https://commons.wikimedia.org/wiki/Special:Redirect/file/FARC_guerrillas_marching_during_the_Caguan_peace_talks_(1998-2002).jpg' work/raw/farc2.png" chatgpt_do_crime/do_crime_render.sh
-          ! grep -q 'dnznrvs05pmza.cloudfront.net' <(grep 'farc[12].png' chatgpt_do_crime/do_crime_render.sh)
+      - name: Apply non-Runway media patch
+        run: python chatgpt_do_crime/patch_no_runway.py
       - name: Render reel
         shell: bash
         run: |

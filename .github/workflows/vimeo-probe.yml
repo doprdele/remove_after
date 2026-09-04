@@ -1,4 +1,4 @@
-name: vimeo-probe
+name: archive-probe
 on:
   push:
     branches: [chatgpt-do-crime-reel-20260903]
@@ -7,26 +7,36 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe player configs
+      - name: Query Internet Archive metadata and search FARC video items
         run: |
           set -euxo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y jq curl >/dev/null
           mkdir -p out
-          for id in 127193878 467357526 573011448 540209503 943225150; do
-            curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 "https://player.vimeo.com/video/${id}/config" -o "out/${id}.json" || true
-            if [ -s "out/${id}.json" ]; then
-              python - "$id" <<'PY'
-import json,sys
-id=sys.argv[1]
-d=json.load(open(f'out/{id}.json'))
-print(id,d.get('video',{}).get('title'))
-for p in d.get('request',{}).get('files',{}).get('progressive',[]):
- print(p.get('height'),p.get('fps'),p.get('url'))
-PY
-            fi
+
+          ITEM='tout.-va.-bien.-1972.-jean-luc.-godard.-1080p.-brrip.x-264-classics'
+          curl -fsSL --retry 3 "https://archive.org/metadata/${ITEM}" -o out/tout_metadata.json
+          echo '=== TOUT FILES ==='
+          jq -r '.files[] | select((.name|ascii_downcase|test("\\.(mkv|mp4|avi|mov)$"))) | [.name,.size,.source,.format] | @tsv' out/tout_metadata.json | sort -k2,2nr | tee out/tout_files.tsv
+
+          echo '=== FARC SEARCH ==='
+          q='(title:(FARC OR guerrilla OR Colombia) OR description:(FARC OR "FARC-EP")) AND mediatype:movies'
+          curl -G -fsSL --retry 3 'https://archive.org/advancedsearch.php' \
+            --data-urlencode "q=${q}" --data-urlencode 'fl[]=identifier' --data-urlencode 'fl[]=title' \
+            --data-urlencode 'fl[]=description' --data-urlencode 'rows=50' --data-urlencode 'output=json' \
+            -o out/farc_search.json
+          jq -r '.response.docs[] | [.identifier,.title] | @tsv' out/farc_search.json | tee out/farc_items.tsv
+
+          echo '=== CANDIDATE VIDEO FILES ==='
+          : > out/farc_files.tsv
+          head -n 30 out/farc_items.tsv | while IFS=$'\t' read -r id title; do
+            curl -fsSL --retry 2 "https://archive.org/metadata/${id}" -o out/tmp.json || continue
+            jq -r --arg id "$id" --arg title "$title" '.files[] | select((.name|ascii_downcase|test("\\.(mkv|mp4|webm|mov)$"))) | [$id,$title,.name,.size,.source,.format] | @tsv' out/tmp.json >> out/farc_files.tsv || true
           done
-          tar -czf vimeo-probe.tgz out
+          sort -t$'\t' -k4,4nr out/farc_files.tsv | head -n 100 | tee out/farc_files_top.tsv
+
       - uses: actions/upload-artifact@v4
         with:
-          name: vimeo-probe
+          name: archive-probe
           path: out/
           retention-days: 1

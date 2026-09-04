@@ -1,0 +1,105 @@
+name: do-crime-github-final-v2
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+    paths:
+      - '.github/workflows/do-crime-github-final-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt-do-crime-reel-20260903
+          fetch-depth: 1
+
+      - name: Install render dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow opencv-python-headless
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Run monitored build
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          mkdir -p gha-status
+          python do-crime-actions/build_final.py 2>&1 | tee github_actions_final_build.log
+          rc=${PIPESTATUS[0]}
+          echo "$rc" > build_exit_code.txt
+          if [[ "$rc" -eq 0 ]]; then
+            echo "SUCCESS" > gha-status/final_status.txt
+          else
+            echo "FAILED exit_code=$rc" > gha-status/final_status.txt
+          fi
+          cp github_actions_final_build.log gha-status/github_actions_final_build.log
+          date -u +%FT%TZ > gha-status/finished_at_utc.txt
+          exit 0
+
+      - name: Package successful outputs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rc=$(cat build_exit_code.txt)
+          if [[ "$rc" -ne 0 ]]; then exit 0; fi
+          cp github_actions_final_build.log gha-final/github_actions_final_build.log
+          cp .github/workflows/do-crime-github-final-v2.yml gha-final/do-crime-github-final-v2.yml
+          python - <<'PY'
+from pathlib import Path
+import zipfile
+zpath=Path('gha-final/do_crime_dont_vote_GITHUB_ACTIONS_repro.zip')
+with zipfile.ZipFile(zpath,'a',zipfile.ZIP_DEFLATED) as z:
+    z.write('github_actions_final_build.log','github_actions_final_build.log')
+    z.write('.github/workflows/do-crime-github-final-v2.yml','do-crime-github-final-v2.yml')
+PY
+
+      - name: Upload build results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-dont-vote-github-actions-final-v2
+          path: |
+            gha-final/
+            gha-status/
+            build_exit_code.txt
+          compression-level: 0
+          retention-days: 5
+          if-no-files-found: warn
+
+      - name: Commit status and successful deliverables
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config http.postBuffer 524288000
+          git add -f gha-status
+          if [[ "$(cat build_exit_code.txt 2>/dev/null || echo 1)" -eq 0 ]]; then
+            git add -f gha-final
+          fi
+          git commit -m 'Record monitored GitHub Actions reel build' || exit 0
+          git pull --rebase origin chatgpt-do-crime-reel-20260903 || true
+          git push origin HEAD:chatgpt-do-crime-reel-20260903
+
+      - name: Fail workflow if render failed
+        if: always()
+        run: |
+          rc=$(cat build_exit_code.txt 2>/dev/null || echo 1)
+          if [[ "$rc" -ne 0 ]]; then
+            echo "Render failed with exit code $rc"
+            exit "$rc"
+          fi

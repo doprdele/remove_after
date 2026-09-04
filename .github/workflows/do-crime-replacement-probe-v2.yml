@@ -1,0 +1,130 @@
+name: do-crime-replacement-probe-v2
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+    paths:
+      - '.github/workflows/do-crime-replacement-probe-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt-do-crime-reel-20260903
+
+      - name: Install tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow
+          yt-dlp --version
+
+      - name: Build candidate contact sheets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf probe-public probe-work
+          mkdir -p probe-public/sheets probe-public/frames probe-work/{metadata,clips}
+          YTDLP=(yt-dlp --no-playlist --force-ipv4 --no-check-certificates --retries 7 --fragment-retries 7 --socket-timeout 45 --concurrent-fragments 4 --js-runtimes node --remote-components ejs:github --impersonate chrome)
+
+          cat > probe-work/queries.tsv <<'EOF'
+          robbery_dark_knight	The Dark Knight bank robbery scene 1080p official clip
+          robbery_heat	Heat bank robbery scene 1080p movie clip
+          robbery_town	The Town bank robbery scene 1080p movie clip
+          robbery_inside_man	Inside Man bank robbery scene 1080p movie clip
+          robbery_point_break	Point Break bank robbery scene 1080p movie clip
+          flag_ignite	protesters light American flag on fire raw footage 1080p
+          flag_burn	American flag burning protest demonstrators raw video 1080p
+          flag_left	left wing protesters burn American flag raw footage
+          EOF
+
+          : > probe-public/candidates.tsv
+          while IFS=$'\t' read -r key query; do
+            echo "SEARCH $key :: $query"
+            found=0
+            while IFS=$'\t' read -r id title duration uploader; do
+              [[ -n "$id" ]] || continue
+              safe="${key}_${id}"
+              url="https://www.youtube.com/watch?v=${id}"
+              echo "CHECK $safe :: $title"
+              if ! yt-dlp "${YTDLP[@]}" --dump-single-json "$url" > "probe-work/metadata/${safe}.json"; then
+                continue
+              fi
+              maxh=$(jq '[.formats[]? | select(.vcodec != "none") | (.height // 0)] | max // 0' "probe-work/metadata/${safe}.json")
+              if [[ "$maxh" -lt 1080 ]]; then
+                continue
+              fi
+              printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$key" "$id" "$maxh" "$duration" "$title" "$uploader" >> probe-public/candidates.tsv
+
+              rm -f "probe-work/clips/${safe}."* 2>/dev/null || true
+              if ! yt-dlp "${YTDLP[@]}" --download-sections '*0-120' --force-keyframes-at-cuts \
+                -f 'best[height<=720]/bestvideo[height<=720]+bestaudio/best' --merge-output-format mp4 \
+                -o "probe-work/clips/${safe}.%(ext)s" "$url"; then
+                continue
+              fi
+              clip=$(find probe-work/clips -maxdepth 1 -type f -name "${safe}.*" ! -name '*.part' ! -name '*.ytdl' | head -n1)
+              [[ -s "$clip" ]] || continue
+
+              ffmpeg -y -hide_banner -loglevel error -i "$clip" \
+                -vf "fps=1/3,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=7:y=7:fontsize=18:fontcolor=white:borderw=2:bordercolor=black,tile=5x8:padding=3:margin=3:color=black" \
+                -frames:v 1 -q:v 2 "probe-public/sheets/${safe}.jpg"
+              for sec in 6 18 36 60 90; do
+                ffmpeg -y -hide_banner -loglevel error -ss "$sec" -i "$clip" -frames:v 1 -q:v 2 "probe-public/frames/${safe}_${sec}s.jpg" || true
+              done
+              rm -f "$clip"
+              found=1
+              break
+            done < <(yt-dlp "${YTDLP[@]}" --flat-playlist --playlist-end 4 \
+              --print '%(id)s\t%(title)s\t%(duration)s\t%(uploader)s' "ytsearch4:${query}" 2>/dev/null || true)
+            if [[ "$found" -ne 1 ]]; then
+              echo -e "${key}\tNO_USABLE_1080P_RESULT\t0\t0\t${query}\t" >> probe-public/candidates.tsv
+            fi
+          done < probe-work/queries.tsv
+
+          python - <<'PY'
+from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+files=sorted(Path('probe-public/sheets').glob('*.jpg'))
+if not files:
+    raise SystemExit('No contact sheets produced')
+font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',20)
+thumbs=[]
+for p in files:
+    im=Image.open(p).convert('RGB')
+    im.thumbnail((760,1120))
+    card=Image.new('RGB',(780,1180),'#111111')
+    card.paste(im,((780-im.width)//2,50))
+    ImageDraw.Draw(card).text((12,12),p.stem,font=font,fill='white')
+    thumbs.append(card)
+cols=2
+rows=(len(thumbs)+cols-1)//cols
+board=Image.new('RGB',(cols*780,rows*1180),'black')
+for i,im in enumerate(thumbs):
+    board.paste(im,((i%cols)*780,(i//cols)*1180))
+board.save('probe-public/MASTER_CONTACT_BOARD.jpg',quality=88)
+PY
+
+          {
+            echo "generated=$(date -u +%FT%TZ)"
+            echo "yt_dlp=$(yt-dlp --version)"
+            echo "commit=${GITHUB_SHA}"
+          } > probe-public/BUILD_INFO.txt
+
+      - name: Commit visual probe to branch
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f probe-public
+          git commit -m 'Add replacement source visual probe' || exit 0
+          git push origin HEAD:chatgpt-do-crime-reel-20260903

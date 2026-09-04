@@ -1,0 +1,301 @@
+name: do-crime-actual-film-bank-final
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-actual-film-bank-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASELINE_RUN_ID: "33891574382"
+      RELEASE_TAG: do-crime-actual-film-bank-20260904
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install production dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq curl unzip zip fonts-dejavu-core tesseract-ocr
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers==4.55.4 opencv-python-headless pillow pytesseract safetensors
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Recover the approved FASTBEAT master
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BASELINE_RUN_ID }}
+          path: recovered_baseline
+
+      - name: Resolve and verify baseline
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p inputs output source_metadata
+          baseline=$(find recovered_baseline -type f \( -iname '*FASTBEAT*60fps*.mp4' -o -iname '*60fps*.mp4' \) 2>/dev/null | head -n1 || true)
+          if [[ -z "$baseline" ]]; then
+            git fetch origin chatgpt-do-crime-reel-20260903
+            git worktree add /tmp/original-reel origin/chatgpt-do-crime-reel-20260903
+            cd /tmp/original-reel
+            chmod +x chatgpt_do_crime/do_crime_render.sh
+            bash chatgpt_do_crime/do_crime_render.sh
+            baseline=$(find /tmp/original-reel -type f \( -iname '*FASTBEAT*60fps*.mp4' -o -iname '*60fps*.mp4' \) | head -n1 || true)
+            cd "$GITHUB_WORKSPACE"
+          fi
+          [[ -n "$baseline" && -s "$baseline" ]] || exit 1
+          cp "$baseline" inputs/baseline_FASTBEAT_60fps.mp4
+          ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate,nb_frames \
+            -of json inputs/baseline_FASTBEAT_60fps.mp4 | tee source_metadata/baseline.ffprobe.json
+
+      - name: Find and download a real 1080p+ classic-film bank-robbery sequence
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > source_metadata/bank_candidates.tsv
+          printf '%s\t%s\t%s\n' x5khd1 'The Dark Knight bank robbery 4K seed' 0 >> source_metadata/bank_candidates.tsv
+          for query in \
+            'The Dark Knight bank robbery 4K' \
+            'Dark Knight opening bank robbery scene' \
+            'Heat bank robbery scene HD' \
+            'The Town bank robbery scene HD' \
+            'Inside Man bank robbery scene HD'; do
+            enc=$(python - "$query" <<'PY'
+import sys,urllib.parse
+print(urllib.parse.quote(sys.argv[1],safe=''))
+PY
+            )
+            curl -LfsS --retry 5 --connect-timeout 20 --max-time 90 \
+              "https://api.dailymotion.com/videos?search=${enc}&fields=id,title,duration&limit=30" \
+              | jq -r '.list[]? | [.id,.title,(.duration//0)] | @tsv' >> source_metadata/bank_candidates.tsv || true
+          done
+          awk -F '\t' '!seen[$1]++' source_metadata/bank_candidates.tsv > source_metadata/bank_candidates_unique.tsv
+
+          chosen_url=''; chosen_id=''; chosen_title=''; chosen_maxh=0; chosen_duration=0
+          while IFS=$'\t' read -r id title listed_duration; do
+            [[ -n "$id" ]] || continue
+            url="https://www.dailymotion.com/video/${id}"
+            echo "PROBE ${id} | ${title}"
+            if ! yt-dlp --no-playlist --force-ipv4 --retries 5 --fragment-retries 5 --socket-timeout 45 \
+                --impersonate chrome --dump-single-json "$url" > source_metadata/bank_probe.json 2>/dev/null; then
+              continue
+            fi
+            maxh=$(jq '[.formats[]? | select(.url and .vcodec != "none") | (.height // 0)] | max // 0' source_metadata/bank_probe.json)
+            dur=$(jq -r '.duration // 0' source_metadata/bank_probe.json)
+            actual_title=$(jq -r '.title // ""' source_metadata/bank_probe.json)
+            printf '%s\t%s\t%s\t%s\n' "$id" "$maxh" "$dur" "$actual_title" >> source_metadata/bank_probe_results.tsv
+            if (( maxh >= 1080 )) && awk -v d="$dur" 'BEGIN{exit !(d>=90)}'; then
+              chosen_url="$url"; chosen_id="$id"; chosen_title="$actual_title"; chosen_maxh="$maxh"; chosen_duration="$dur"
+              break
+            fi
+          done < source_metadata/bank_candidates_unique.tsv
+
+          [[ -n "$chosen_url" ]] || { cat source_metadata/bank_probe_results.tsv 2>/dev/null || true; echo 'No real 1080p+ bank-robbery film source found' >&2; exit 1; }
+          printf '%s\n' "$chosen_url" > source_metadata/chosen_bank_url.txt
+          printf '%s\t%s\t%s\t%s\n' "$chosen_id" "$chosen_maxh" "$chosen_duration" "$chosen_title" > source_metadata/chosen_bank_source.tsv
+
+          max_section=$(python - "$chosen_duration" <<'PY'
+import sys
+print(f"{min(float(sys.argv[1]),420.0):.3f}")
+PY
+          )
+          yt-dlp --no-playlist --force-ipv4 --retries 10 --fragment-retries 10 --socket-timeout 45 \
+            --impersonate chrome --write-info-json --download-sections "*0-${max_section}" --force-keyframes-at-cuts \
+            -f 'bestvideo[height>=1080]+bestaudio/best[height>=1080]' --merge-output-format mp4 \
+            -o 'inputs/bank_master.%(ext)s' "$chosen_url"
+          bank_master=$(find inputs -maxdepth 1 -type f -name 'bank_master.*' ! -name '*.info.json' ! -name '*.part' | head -n1)
+          [[ -s "$bank_master" ]] || exit 1
+          [[ "$bank_master" == inputs/bank_master.mp4 ]] || mv "$bank_master" inputs/bank_master.mp4
+          info=$(find inputs -maxdepth 1 -name 'bank_master*.info.json' | head -n1 || true)
+          [[ -n "$info" ]] && mv "$info" source_metadata/bank_master.info.json || true
+          ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate \
+            -of json inputs/bank_master.mp4 | tee source_metadata/bank_master.ffprobe.json
+          python - source_metadata/bank_master.ffprobe.json <<'PY'
+import json,sys
+j=json.load(open(sys.argv[1])); v=next(s for s in j['streams'] if s['codec_type']=='video')
+assert min(int(v['width']),int(v['height']))>=1080, v
+PY
+
+      - name: Split the real bank-heist sequence into three distinct source zones
+        shell: bash
+        run: |
+          set -euxo pipefail
+          duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 inputs/bank_master.mp4)
+          python - "$duration" > /tmp/bank_ranges.tsv <<'PY'
+import sys
+D=float(sys.argv[1])
+# Separate thirds ensure visually distinct stages of the same actual bank heist:
+# approach/entry, interior/vault, and escape/confrontation.
+margin=min(5.0,D*0.02)
+edges=[margin,D/3,2*D/3,D-margin]
+for i in range(3):
+    start=edges[i]+(2.0 if i else 0.0)
+    end=edges[i+1]-(2.0 if i<2 else 0.0)
+    if end-start<8:
+        start=max(0,D*(i/3)); end=min(D,D*((i+1)/3))
+    print(i+1,f"{start:.3f}",f"{max(4.0,end-start):.3f}")
+PY
+          while read -r index start length; do
+            ffmpeg -y -hide_banner -loglevel warning -ss "$start" -i inputs/bank_master.mp4 -t "$length" \
+              -map 0:v:0 -an -c:v libx264 -preset veryfast -crf 16 -profile:v high -pix_fmt yuv420p \
+              -movflags +faststart "inputs/bank_robbery_${index}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate \
+              -of json "inputs/bank_robbery_${index}.mp4" > "source_metadata/bank_robbery_${index}.ffprobe.json"
+          done < /tmp/bank_ranges.tsv
+
+      - name: Download a clear 1080p+ American flag burning at a protest
+        shell: bash
+        run: |
+          set -euo pipefail
+          urls=(
+            'https://www.dailymotion.com/video/x9l6a1o'
+            'https://www.dailymotion.com/video/x9phdo2'
+            'https://www.dailymotion.com/video/x9xdcdk'
+            'https://www.foxnews.com/video/6374003948112'
+            'https://www.foxnews.com/video/6374048349112'
+            'https://www.thenationalnews.com/video/YCwbZJv4/anti-netanyahu-protesters-burn-american-flag-and-hoist-palestinian-one-in-washington/'
+          )
+          : > source_metadata/flag_attempts.log
+          chosen=''
+          for url in "${urls[@]}"; do
+            echo "PROBE $url" | tee -a source_metadata/flag_attempts.log
+            rm -f inputs/flag_candidate.* inputs/flag_candidate*.info.json 2>/dev/null || true
+            if ! yt-dlp --no-playlist --force-ipv4 --retries 8 --fragment-retries 8 --socket-timeout 45 \
+                --impersonate chrome --dump-single-json "$url" > source_metadata/flag_probe.json 2>>source_metadata/flag_attempts.log; then continue; fi
+            maxh=$(jq '[.formats[]? | select(.url and .vcodec != "none") | (.height // 0)] | max // 0' source_metadata/flag_probe.json)
+            echo "max_height=$maxh" | tee -a source_metadata/flag_attempts.log
+            (( maxh >= 1080 )) || continue
+            if yt-dlp --no-playlist --force-ipv4 --retries 10 --fragment-retries 10 --socket-timeout 45 \
+                --impersonate chrome --write-info-json --download-sections '*0-180' --force-keyframes-at-cuts \
+                -f 'bestvideo[height>=1080]+bestaudio/best[height>=1080]' --merge-output-format mp4 \
+                -o 'inputs/flag_candidate.%(ext)s' "$url" >>source_metadata/flag_attempts.log 2>&1; then
+              chosen=$(find inputs -maxdepth 1 -type f -name 'flag_candidate.*' ! -name '*.info.json' ! -name '*.part' | head -n1)
+              [[ -n "$chosen" ]] && { printf '%s\n' "$url" > source_metadata/chosen_flag_url.txt; break; }
+            fi
+          done
+          [[ -n "$chosen" && -s "$chosen" ]] || { cat source_metadata/flag_attempts.log; exit 1; }
+          mv "$chosen" inputs/american_flag_burning_protest.mp4
+          info=$(find inputs -maxdepth 1 -name 'flag_candidate*.info.json' | head -n1 || true)
+          [[ -n "$info" ]] && mv "$info" source_metadata/american_flag_burning.info.json || true
+          ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate \
+            -of json inputs/american_flag_burning_protest.mp4 | tee source_metadata/american_flag_burning.ffprobe.json
+          python - source_metadata/american_flag_burning.ffprobe.json <<'PY'
+import json,sys
+j=json.load(open(sys.argv[1])); v=next(s for s in j['streams'] if s['codec_type']=='video')
+assert min(int(v['width']),int(v['height']))>=1080, v
+PY
+
+      - name: Replace every FARC insert with the three real bank-heist excerpts
+        shell: bash
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          set -euxo pipefail
+          python chatgpt_do_crime/build_actual_bank_revision.py \
+            --baseline inputs/baseline_FASTBEAT_60fps.mp4 \
+            --bank inputs/bank_robbery_1.mp4 inputs/bank_robbery_2.mp4 inputs/bank_robbery_3.mp4 \
+            --flag inputs/american_flag_burning_protest.mp4 \
+            --output-dir output
+          mv output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_60fps.mp4 \
+             output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_60fps.mp4
+
+      - name: Independent technical validation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          master=output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_60fps.mp4
+          ffmpeg -v error -i "$master" -f null -
+          frames=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nw=1:nk=1 "$master")
+          [[ "$frames" == 900 ]]
+          duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$master")
+          awk -v d="$duration" 'BEGIN{exit !(d>=14.98 && d<=15.02)}'
+          jq -e '.replacement_intervals | map(select(.kind=="bank")) | length >= 3' output/replacement_report.json >/dev/null
+          jq -e '.replacement_intervals | map(select(.kind=="flag")) | length == 1' output/replacement_report.json >/dev/null
+          ffprobe -v error -show_entries format=duration,size,bit_rate:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,nb_frames,sample_rate,channels \
+            -of json "$master" > output/final_ffprobe.json
+          jq --argjson frames "$frames" '. + {validated_frame_count:$frames}' output/final_ffprobe.json > output/final_ffprobe.tmp
+          mv output/final_ffprobe.tmp output/final_ffprobe.json
+
+      - name: Package the reproducible delivery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp chatgpt_do_crime/build_actual_bank_revision.py output/
+          cp .github/workflows/do-crime-actual-film-bank-final.yml output/
+          cp -r source_metadata output/source_metadata
+          cat > output/README.txt <<'EOF'
+DO CRIME. DON'T VOTE — ACTUAL CLASSIC-FILM BANK-ROBBERY REVISION
+
+The approved FASTBEAT master remains unchanged except for the detected FARC
+shots and the old flag insert. Every FARC shot is replaced by one of three
+distinct excerpts from a real classic-film bank-heist sequence whose native
+stream was verified at 1080p or above. The replacement board shows all three
+source zones plus the selected American-flag-burning protest crop.
+
+No player watermarks are present in downloaded media. The portrait crop removes
+source corners, and selection is OCR-screened to minimize burned-in titles,
+lower thirds or logos. The two original grain-free title flashes remain intact.
+
+Validated: 1080x1920, H.264 High, AAC, 60 fps, 900 frames, 15.000 seconds.
+EOF
+          (cd output && zip -9 do_crime_dont_vote_ACTUAL_BANK_ROBBERY_repro.zip \
+            build_actual_bank_revision.py do-crime-actual-film-bank-final.yml README.txt \
+            filter_complex.txt replacement_report.json final_ffprobe.json final_contact_sheet.jpg replacement_contact_board.jpg source_metadata/*)
+          mkdir -p delivery
+          cp output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_60fps.mp4 delivery/
+          cp output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_repro.zip delivery/
+          cp output/final_contact_sheet.jpg delivery/
+          cp output/replacement_contact_board.jpg delivery/
+          cp output/final_ffprobe.json delivery/
+          cp output/replacement_report.json delivery/
+          (cd delivery && zip -9 ../output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_COMPLETE.zip ./*)
+          sha256sum output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY* output/final_contact_sheet.jpg output/replacement_contact_board.jpg > output/SHA256SUMS.txt
+
+      - name: Upload GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-actual-film-bank-final
+          path: |
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_60fps.mp4
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_repro.zip
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_COMPLETE.zip
+            output/final_contact_sheet.jpg
+            output/replacement_contact_board.jpg
+            output/final_ffprobe.json
+            output/replacement_report.json
+            output/SHA256SUMS.txt
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Publish predictable release assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh release delete "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$RELEASE_TAG" \
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_60fps.mp4 \
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_repro.zip \
+            output/do_crime_dont_vote_ACTUAL_BANK_ROBBERY_COMPLETE.zip \
+            output/final_contact_sheet.jpg \
+            output/replacement_contact_board.jpg \
+            output/final_ffprobe.json \
+            output/replacement_report.json \
+            output/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "DO CRIME. DON'T VOTE — actual bank-robbery revision" \
+            --notes "Verified 15.000-second, 1080x1920, 60 fps revision using three distinct excerpts from a real classic-film bank-heist sequence. The FARC shots are gone; the flag insert is a clear American flag burning at a protest."

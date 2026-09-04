@@ -1,0 +1,80 @@
+name: do-crime-fetch-replacements
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-reel-20260903
+    paths:
+      - '.github/workflows/do-crime-fetch-replacements.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt-do-crime-reel-20260903
+          fetch-depth: 1
+
+      - name: Install tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow opencv-python-headless
+          yt-dlp --version
+
+      - name: Select and download four replacement clips
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          rm -rf replacement-status
+          mkdir -p replacement-status
+          python -m py_compile do-crime-actions/fetch_replacements.py do-crime-actions/select_source.py
+          python do-crime-actions/fetch_replacements.py 2>&1 | tee replacement_build.log
+          rc=${PIPESTATUS[0]}
+          echo "$rc" > replacement_exit_code.txt
+          if [[ "$rc" -eq 0 ]]; then echo SUCCESS > replacement-status/status.txt; else echo "FAILED exit_code=$rc" > replacement-status/status.txt; fi
+          cp replacement_build.log replacement-status/build.log
+          date -u +%FT%TZ > replacement-status/finished_at_utc.txt
+          exit 0
+
+      - name: Upload sources and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-replacement-clips
+          path: |
+            replacement-clips/
+            replacement-status/
+            replacement_exit_code.txt
+          compression-level: 0
+          retention-days: 5
+          if-no-files-found: warn
+
+      - name: Commit source clips or failure log
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config http.postBuffer 524288000
+          git add -f replacement-status
+          if [[ "$(cat replacement_exit_code.txt 2>/dev/null || echo 1)" -eq 0 ]]; then git add -f replacement-clips; fi
+          git commit -m 'Record focused replacement clip build' || exit 0
+          git pull --rebase origin chatgpt-do-crime-reel-20260903 || true
+          git push origin HEAD:chatgpt-do-crime-reel-20260903
+
+      - name: Propagate failure
+        if: always()
+        run: |
+          rc=$(cat replacement_exit_code.txt 2>/dev/null || echo 1)
+          if [[ "$rc" -ne 0 ]]; then exit "$rc"; fi

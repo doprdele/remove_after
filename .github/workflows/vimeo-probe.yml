@@ -1,4 +1,4 @@
-name: archive-probe
+name: farc-source-probe
 on:
   push:
     branches: [chatgpt-do-crime-reel-20260903]
@@ -7,38 +7,34 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe Tout original and exact archived FARC YouTube IDs
+      - name: Probe FARC field-report sources
         run: |
           set -euxo pipefail
           sudo apt-get update >/dev/null
           sudo apt-get install -y jq curl ffmpeg >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
           mkdir -p out
 
-          ITEM='tout.-va.-bien.-1972.-jean-luc.-godard.-1080p.-brrip.x-264-classics'
-          curl -fsSL --retry 3 "https://archive.org/metadata/${ITEM}" -o out/tout_metadata.json
-          echo '=== TOUT ORIGINAL ==='
-          jq -r '.files[] | select(.source=="original" and (.name|endswith(".mkv"))) | [.name,.size,.format,.width,.height,.length] | @tsv' out/tout_metadata.json | tee out/tout_original.tsv
-
-          echo '=== EXACT YOUTUBE-ID ARCHIVE SEARCH ==='
-          : > out/exact_search.tsv
-          for vid in SKJblKuj84E P6hbaoCuZHg M1OTlP9CV4g; do
-            q="identifier:*${vid}* OR title:\"${vid}\" OR description:\"${vid}\""
-            curl -G -fsSL --retry 3 'https://archive.org/advancedsearch.php' \
-              --data-urlencode "q=${q}" --data-urlencode 'fl[]=identifier' --data-urlencode 'fl[]=title' \
-              --data-urlencode 'rows=50' --data-urlencode 'output=json' -o "out/${vid}_search.json"
-            jq -r --arg v "$vid" '.response.docs[] | [$v,.identifier,.title] | @tsv' "out/${vid}_search.json" | tee -a out/exact_search.tsv
+          echo '=== AL JAZEERA PAGE FORMATS ===' | tee out/results.txt
+          for u in \
+            'https://www.aljazeera.com/news/2011/5/30/life-inside-colombias-farc' \
+            'https://www.aljazeera.com/news/2011/11/6/colombia-rebels-bring-services-to-the-jungle'; do
+            echo "URL $u" | tee -a out/results.txt
+            yt-dlp --no-playlist --list-formats "$u" 2>&1 | tee -a out/results.txt || true
           done
 
-          echo '=== EXACT CANDIDATE FILES ==='
-          : > out/exact_files.tsv
-          while IFS=$'\t' read -r vid id title; do
-            curl -fsSL --retry 2 "https://archive.org/metadata/${id}" -o out/tmp.json || continue
-            jq -r --arg vid "$vid" --arg id "$id" --arg title "$title" '.files[] | select((.name|ascii_downcase|test("\\.(mkv|mp4|webm|mov)$"))) | [$vid,$id,$title,.name,.size,.source,.format,.width,.height,.length] | @tsv' out/tmp.json >> out/exact_files.tsv || true
-          done < out/exact_search.tsv
-          cat out/exact_files.tsv
+          echo '=== EL ESPECTADOR DIRECT MP4 ===' | tee -a out/results.txt
+          U='http://static.elespectador.com/archivos/2011/04/6f5748fbeff512f4eba9706efdbdda2a.mp4'
+          curl -LfsS --retry 3 --connect-timeout 15 --max-time 180 "$U" -o out/farc_espectador.mp4 || true
+          if [ -s out/farc_espectador.mp4 ]; then
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json out/farc_espectador.mp4 | tee -a out/results.txt
+          fi
+
+          echo '=== MODERNGHANA AL JAZEERA MIRROR ===' | tee -a out/results.txt
+          yt-dlp --no-playlist --list-formats 'https://www.modernghana.com/videonews/aljazeera/2/657752/' 2>&1 | tee -a out/results.txt || true
 
       - uses: actions/upload-artifact@v4
         with:
-          name: archive-probe
+          name: farc-source-probe
           path: out/
           retention-days: 1

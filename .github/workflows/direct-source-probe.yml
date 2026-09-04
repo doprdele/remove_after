@@ -1,0 +1,79 @@
+name: direct-source-probe
+
+on:
+  push:
+    branches: [chatgpt-do-crime-reel-20260903]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq curl >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+      - name: Fetch public source samples
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out/{samples,configs,contacts,audio}
+
+          fetch_vimeo() {
+            key="$1"; id="$2"; start="$3"; dur="$4"
+            config="out/configs/${key}.json"
+            curl -LfsS --retry 4 --connect-timeout 20 --max-time 90 "https://player.vimeo.com/video/${id}/config" -o "$config"
+            jq '{title:.video.title,duration:.video.duration,width:.video.width,height:.video.height,progressive:[.request.files.progressive[]? | {width,height,fps,mime,url}],hls:.request.files.hls.cdns}' "$config" > "out/configs/${key}_summary.json"
+            url=$(jq -r '[.request.files.progressive[]? | select(.height>=720)] | sort_by(.height,.fps) | last | .url // empty' "$config")
+            if [ -z "$url" ]; then
+              url=$(jq -r '.request.files.hls.cdns | to_entries[0].value.url // empty' "$config")
+            fi
+            test -n "$url"
+            ffmpeg -y -hide_banner -loglevel warning -ss "$start" -i "$url" -t "$dur" -map 0:v:0 -an -vf 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p' -c:v libx264 -preset veryfast -crf 18 -profile:v high -movflags +faststart "out/samples/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/samples/${key}.mp4" > "out/configs/${key}_ffprobe.json"
+            ffmpeg -y -hide_banner -loglevel error -i "out/samples/${key}.mp4" -vf "fps=1,scale=320:180,tile=5x6:padding=3:margin=3:color=black" -frames:v 1 -q:v 2 "out/contacts/${key}.jpg"
+          }
+
+          fetch_vimeo tout 127193878 0 70
+          fetch_vimeo farc 194571130 0 70
+          fetch_vimeo flag 218313862 0 70
+
+          # Verify direct watermark-free stock masters and download short samples.
+          stock() {
+            key="$1"; url="$2"; start="$3"
+            ffmpeg -y -hide_banner -loglevel warning -ss "$start" -i "$url" -t 12 -map 0:v:0 -an -vf 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p' -c:v libx264 -preset veryfast -crf 18 -profile:v high -movflags +faststart "out/samples/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/samples/${key}.mp4" > "out/configs/${key}_ffprobe.json"
+            ffmpeg -y -hide_banner -loglevel error -i "out/samples/${key}.mp4" -vf 'fps=1,scale=320:180,tile=4x3:padding=3:margin=3:color=black' -frames:v 1 -q:v 2 "out/contacts/${key}.jpg"
+          }
+          stock cash 'https://videos.pexels.com/video-files/3196002/3196002-uhd_3840_2160_25fps.mp4' 0
+          stock watch 'https://videos.pexels.com/video-files/6230464/6230464-hd_1920_1080_24fps.mp4' 0
+          stock bag 'https://videos.pexels.com/video-files/6649983/6649983-uhd_4096_2160_25fps.mp4' 0
+          stock programmer 'https://videos.pexels.com/video-files/13522186/13522186-uhd_3840_2160_25fps.mp4' 0
+          stock linux 'https://videos.pexels.com/video-files/4578336/4578336-hd_1920_1080_25fps.mp4' 0
+          stock snow 'https://videos.pexels.com/video-files/30244590/12967797_3840_2160_24fps.mp4' 0
+
+          audio_ok=0
+          for u in 'https://audiomack.com/zericxxn/song/raya-slowed' 'https://audiomack.com/darwin_10/song/raya-slowed'; do
+            rm -f out/audio/raya.* 2>/dev/null || true
+            if yt-dlp --no-playlist --retries 5 --socket-timeout 45 -f 'bestaudio/best' -x --audio-format m4a --audio-quality 0 -o 'out/audio/raya.%(ext)s' "$u"; then audio_ok=1; break; fi
+          done
+          test "$audio_ok" -eq 1
+          audio=$(find out/audio -maxdepth 1 -type f -name 'raya.*' ! -name '*.part' | head -n1)
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,sample_rate,channels -of json "$audio" > out/configs/audio_ffprobe.json
+
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/configs/manifest.txt
+      - name: Upload source probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-source-probe
+          path: out/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: warn

@@ -37,10 +37,10 @@ if old_label not in s:
 s = s.replace(old_label, new_label, 1)
 
 # The first fast-grid test landed three frames short because fractional segment
-# durations rounded downward. Extend the clean closing title and enforce an
-# exact 900-frame clock at 60 fps.
+# durations rounded downward. FFmpeg's trim end_frame is exclusive, so request
+# frame 901 to deliver frames 0-899: exactly 900 frames at 60 fps.
 old_tail = "[o3]trim=duration=15,setpts=PTS-STARTPTS[outv]"
-new_tail = "[o3]tpad=stop_mode=clone:stop_duration=0.12,trim=end_frame=900,fps=60,setpts=N/(60*TB)[outv]"
+new_tail = "[o3]tpad=stop_mode=clone:stop_duration=0.12,trim=end_frame=901,fps=60,setpts=N/(60*TB)[outv]"
 if old_tail not in s:
     raise SystemExit("final filter tail missing")
 s = s.replace(old_tail, new_tail, 1)
@@ -62,7 +62,7 @@ FINAL.chmod(0o755)
 checks = [
     "instagram.com/reel/DbsgjHEtQWO",
     "instagram_cash_opulence",
-    "trim=end_frame=900",
+    "trim=end_frame=901",
     "-ss 14.740 -i work/audio/raya_master.m4a",
     "apad=pad_dur=0.20,atrim=duration=15",
     "do_crime_dont_vote_reel_fastbeat_instagram.mp4",

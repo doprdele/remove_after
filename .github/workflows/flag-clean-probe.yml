@@ -1,0 +1,81 @@
+name: flag-clean-probe
+
+on:
+  push:
+    branches: [chatgpt-flag-clean-probe-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y ffmpeg jq >/dev/null
+          python -m pip install --upgrade "yt-dlp[default]" >/dev/null
+          yt-dlp --version
+      - name: Download proxies and make contact sheets
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p out/{proxy,metadata,contacts,logs}
+
+          probe() {
+            key="$1"; url="$2"
+            echo "===== ${key}: ${url} =====" | tee "out/logs/${key}.log"
+            rm -f "out/proxy/${key}."* "out/metadata/${key}.info.json" 2>/dev/null || true
+
+            if ! yt-dlp --no-playlist --retries 8 --fragment-retries 8 --socket-timeout 45 \
+                 --write-info-json --skip-download -o "out/metadata/${key}.%(ext)s" "$url" \
+                 >>"out/logs/${key}.log" 2>&1; then
+              echo "metadata failed" | tee -a "out/logs/${key}.log"
+              return 0
+            fi
+            info=$(find out/metadata -maxdepth 1 -type f -name "${key}.info.json" | head -n1)
+            test -s "$info" || return 0
+            jq '{id,title,uploader,duration,width,height,fps,webpage_url,formats:[.formats[]? | select(.vcodec!="none") | {format_id,ext,width,height,fps,vcodec,filesize,filesize_approx}]}' "$info" > "out/metadata/${key}.summary.json"
+
+            if ! yt-dlp --no-playlist --retries 8 --fragment-retries 8 --socket-timeout 45 \
+                 -f 'best[height<=720]/best' --recode-video mp4 \
+                 -o "out/proxy/${key}.%(ext)s" "$url" >>"out/logs/${key}.log" 2>&1; then
+              echo "proxy failed" | tee -a "out/logs/${key}.log"
+              return 0
+            fi
+            src=$(find out/proxy -maxdepth 1 -type f -name "${key}.*" ! -name '*.part' | head -n1)
+            test -s "$src" || return 0
+            [ "$src" = "out/proxy/${key}.mp4" ] || mv "$src" "out/proxy/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "out/proxy/${key}.mp4" > "out/metadata/${key}.proxy.ffprobe.json"
+
+            for page in 0 1 2 3; do
+              start=$((page*180))
+              ffmpeg -y -hide_banner -loglevel error -ss "$start" -t 180 -i "out/proxy/${key}.mp4" \
+                -vf "fps=1/5,scale=240:135,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=4:y=4:fontsize=14:fontcolor=white:borderw=2:bordercolor=black,tile=6x6:padding=3:margin=3:color=black" \
+                -frames:v 1 -q:v 2 "out/contacts/${key}_page${page}.jpg" 2>>"out/logs/${key}.log" || true
+            done
+          }
+
+          probe denver_antiracist 'https://vimeo.com/132108480'
+          probe white_house 'https://www.dailymotion.com/video/x9phdo2'
+          probe manila_anti_trump 'https://www.dailymotion.com/video/x696jv6'
+          probe philippines_workers 'https://www.dailymotion.com/video/x5b9gsb'
+          probe anti_ice_compilation 'https://www.dailymotion.com/video/x9l6a1o'
+          probe graven_images 'https://vimeo.com/45543209'
+
+          find out -type f -printf '%P\t%s bytes\n' | sort > out/metadata/manifest.txt
+          # Proxies are retained only when reasonably small; contacts/metadata always upload.
+          find out/proxy -type f -size +180M -delete || true
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flag-clean-probe
+          path: out/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error

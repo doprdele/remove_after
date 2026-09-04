@@ -1,0 +1,198 @@
+name: do-crime-actual-bank-revision
+
+on:
+  push:
+    branches:
+      - chatgpt-do-crime-corrected-actual-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BASELINE_RUN_ID: "33891574382"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg, yt-dlp, CLIP, OCR and OpenCV
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq curl unzip zip fonts-dejavu-core tesseract-ocr
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade "yt-dlp[default]" curl-cffi
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers==4.55.4 opencv-python-headless pillow pytesseract safetensors
+          yt-dlp --version
+          ffmpeg -version | head -n 2
+
+      - name: Recover the completed FASTBEAT 60 fps baseline artifact
+        id: baseline_artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BASELINE_RUN_ID }}
+          path: recovered_baseline
+
+      - name: Resolve baseline or rebuild it from the prior branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p inputs output source_metadata
+          baseline=$(find recovered_baseline -type f \( -iname '*FASTBEAT*60fps*.mp4' -o -iname '*60fps*.mp4' \) 2>/dev/null | head -n 1 || true)
+          if [[ -z "$baseline" ]]; then
+            echo "Cross-run artifact was unavailable; rebuilding from the last successful source branch."
+            git fetch origin chatgpt-do-crime-reel-20260903
+            git worktree add /tmp/original-reel origin/chatgpt-do-crime-reel-20260903
+            cd /tmp/original-reel
+            chmod +x chatgpt_do_crime/do_crime_render.sh
+            bash chatgpt_do_crime/do_crime_render.sh
+            baseline=$(find /tmp/original-reel -type f \( -iname '*FASTBEAT*60fps*.mp4' -o -iname '*60fps*.mp4' \) | head -n 1 || true)
+            cd "$GITHUB_WORKSPACE"
+          fi
+          [[ -n "$baseline" && -s "$baseline" ]] || { echo "No baseline master recovered" >&2; exit 1; }
+          cp "$baseline" inputs/baseline_FASTBEAT_60fps.mp4
+          ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate,nb_frames \
+            -of json inputs/baseline_FASTBEAT_60fps.mp4 | tee source_metadata/baseline.ffprobe.json
+
+      - name: Download three watermark-free 4K armed-robbery sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          download_pexels() {
+            local key="$1" id="$2"
+            curl -LfsS --retry 8 --retry-delay 2 --connect-timeout 30 --max-time 1800 \
+              -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/127 Safari/537.36' \
+              "https://www.pexels.com/download/video/${id}/" -o "inputs/${key}.mp4"
+            test -s "inputs/${key}.mp4"
+            ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate \
+              -of json "inputs/${key}.mp4" | tee "source_metadata/${key}.ffprobe.json"
+            python - "source_metadata/${key}.ffprobe.json" <<'PY'
+import json,sys
+j=json.load(open(sys.argv[1])); v=next(s for s in j['streams'] if s['codec_type']=='video')
+w,h=int(v['width']),int(v['height'])
+assert min(w,h)>=1080, f'source is below 1080p: {w}x{h}'
+PY
+          }
+          # Three different 4K productions: masked robbers with firearms,
+          # cash/briefcase, approach and getaway. No burned-in uploader marks.
+          download_pexels bank_robbery_1 7232003
+          download_pexels bank_robbery_2 7231264
+          download_pexels bank_robbery_3 8102800
+
+      - name: Download a clear 1080p+ American-flag-burning protest source
+        shell: bash
+        run: |
+          set -euo pipefail
+          urls=(
+            'https://www.dailymotion.com/video/x9l6a1o'
+            'https://www.dailymotion.com/video/x9phdo2'
+            'https://www.dailymotion.com/video/x9xdcdk'
+            'https://www.foxnews.com/video/6374003948112'
+            'https://www.foxnews.com/video/6374048349112'
+            'https://www.thenationalnews.com/video/YCwbZJv4/anti-netanyahu-protesters-burn-american-flag-and-hoist-palestinian-one-in-washington/'
+          )
+          : > source_metadata/flag_attempts.log
+          chosen=''
+          for url in "${urls[@]}"; do
+            echo "PROBE $url" | tee -a source_metadata/flag_attempts.log
+            rm -f inputs/flag_candidate.* inputs/flag_candidate*.info.json 2>/dev/null || true
+            if ! yt-dlp --no-playlist --force-ipv4 --retries 8 --fragment-retries 8 --socket-timeout 45 \
+                --impersonate chrome --dump-single-json "$url" > source_metadata/flag_probe.json 2>>source_metadata/flag_attempts.log; then
+              continue
+            fi
+            maxh=$(jq '[.formats[]? | select(.url and .vcodec != "none") | (.height // 0)] | max // 0' source_metadata/flag_probe.json)
+            echo "max_height=$maxh" | tee -a source_metadata/flag_attempts.log
+            if (( maxh < 1080 )); then continue; fi
+            if yt-dlp --no-playlist --force-ipv4 --retries 10 --fragment-retries 10 --socket-timeout 45 \
+                --impersonate chrome --write-info-json --download-sections '*0-180' --force-keyframes-at-cuts \
+                -f 'bestvideo[height>=1080]+bestaudio/best[height>=1080]' --merge-output-format mp4 \
+                -o 'inputs/flag_candidate.%(ext)s' "$url" >>source_metadata/flag_attempts.log 2>&1; then
+              chosen=$(find inputs -maxdepth 1 -type f -name 'flag_candidate.*' ! -name '*.info.json' ! -name '*.part' | head -n1)
+              [[ -n "$chosen" ]] && break
+            fi
+          done
+          [[ -n "$chosen" && -s "$chosen" ]] || { cat source_metadata/flag_attempts.log; echo 'No 1080p+ flag source succeeded' >&2; exit 1; }
+          mv "$chosen" inputs/american_flag_burning_protest.mp4
+          info=$(find inputs -maxdepth 1 -name 'flag_candidate*.info.json' | head -n1 || true)
+          [[ -n "$info" ]] && mv "$info" source_metadata/american_flag_burning.info.json || true
+          ffprobe -v error -show_entries format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate \
+            -of json inputs/american_flag_burning_protest.mp4 | tee source_metadata/american_flag_burning.ffprobe.json
+          python - source_metadata/american_flag_burning.ffprobe.json <<'PY'
+import json,sys
+j=json.load(open(sys.argv[1])); v=next(s for s in j['streams'] if s['codec_type']=='video')
+w,h=int(v['width']),int(v['height'])
+assert min(w,h)>=1080, f'flag source is below 1080p: {w}x{h}'
+PY
+
+      - name: Detect the old FARC and flag shots and render actual replacements
+        shell: bash
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          set -euxo pipefail
+          python chatgpt_do_crime/build_actual_bank_revision.py \
+            --baseline inputs/baseline_FASTBEAT_60fps.mp4 \
+            --bank inputs/bank_robbery_1.mp4 inputs/bank_robbery_2.mp4 inputs/bank_robbery_3.mp4 \
+            --flag inputs/american_flag_burning_protest.mp4 \
+            --output-dir output
+
+      - name: Produce reproducibility and complete delivery archives
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp chatgpt_do_crime/build_actual_bank_revision.py output/
+          cp .github/workflows/do-crime-actual-bank-revision.yml output/
+          cp -r source_metadata output/source_metadata
+          cat > output/README.txt <<'EOF'
+DO CRIME. DON'T VOTE — ACTUAL BANK-ROBBERY REVISION
+
+This output starts from the approved FASTBEAT 60 fps master. CLIP identifies
+all guerrilla/FARC inserts and the prior flag insert; those precise intervals
+are replaced while the soundtrack, two title flashes and every other shot are
+left in place.
+
+Bank sources: three separate watermark-free Pexels 4K armed-robbery videos.
+Flag source: first successful 1080p+ protest source from the candidates recorded
+in source_metadata/flag_attempts.log. The portrait crop permanently excludes
+source corners; candidate framing is OCR-screened to avoid bugs/lower thirds.
+
+Validated output: 1080x1920, 60 fps, 900 frames, H.264 High, AAC, 15.000 s.
+EOF
+          (cd output && zip -9 do_crime_dont_vote_BANK_ROBBERY_CORRECTED_repro.zip \
+            build_actual_bank_revision.py do-crime-actual-bank-revision.yml README.txt \
+            filter_complex.txt replacement_report.json final_ffprobe.json final_contact_sheet.jpg replacement_contact_board.jpg source_metadata/*)
+          mkdir -p delivery
+          cp output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_60fps.mp4 delivery/
+          cp output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_repro.zip delivery/
+          cp output/final_contact_sheet.jpg delivery/
+          cp output/replacement_contact_board.jpg delivery/
+          cp output/final_ffprobe.json delivery/
+          (cd delivery && zip -9 ../output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_COMPLETE.zip ./*)
+          sha256sum output/* > output/SHA256SUMS.txt
+
+      - name: Upload verified corrected reel
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-crime-actual-bank-revision
+          path: |
+            output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_60fps.mp4
+            output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_repro.zip
+            output/do_crime_dont_vote_BANK_ROBBERY_CORRECTED_COMPLETE.zip
+            output/final_contact_sheet.jpg
+            output/replacement_contact_board.jpg
+            output/final_ffprobe.json
+            output/replacement_report.json
+            output/SHA256SUMS.txt
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error

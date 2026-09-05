@@ -1,0 +1,58 @@
+name: cremated-upright-canberra-inspect
+on:
+  push:
+    branches: [chatgpt-cremated-upright-20260905]
+    paths: ['.github/workflows/cremated-upright-canberra-inspect.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow
+      - name: Inspect public tour
+        run: |
+          python -u - <<'PY'
+          import subprocess as sp,sys,json
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+          out=Path('canberra_inspect');out.mkdir(exist_ok=True)
+          url='https://player.vimeo.com/video/842357988?app_id=58479&autopause=0&badge=0&player_id=0'
+          cmd=[sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','--socket-timeout','25','--retries','2','--impersonate','chrome','--write-info-json','-f','best[height<=480]/bestvideo[height<=480]','-o',str(out/'inspection_only.%(ext)s'),url]
+          p=sp.run(cmd,stdout=sp.PIPE,stderr=sp.STDOUT,text=True,timeout=390)
+          (out/'download.log').write_text(p.stdout);print(p.stdout[-5000:])
+          media=[p for p in out.glob('inspection_only.*') if p.suffix in ('.mp4','.mkv','.webm')]
+          if media:
+            src=media[0];probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(src)]))
+            (out/'probe.json').write_text(json.dumps(probe,indent=2))
+            dur=float(probe['format']['duration']);interval=dur/192
+            print('DURATION',dur,'INTERVAL',interval)
+            thumbs=out/'thumbs';thumbs.mkdir(exist_ok=True)
+            sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(src),'-vf',f'fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2','-frames:v','192',str(thumbs/'%04d.jpg')],check=True,timeout=180)
+            files=sorted(thumbs.glob('*.jpg'))
+            for page in range(4):
+              im=Image.new('RGB',(6*322,8*200));draw=ImageDraw.Draw(im)
+              for j,path in enumerate(files[page*48:(page+1)*48]):
+                x=j%6*322;y=j//6*200;im.paste(Image.open(path),(x,y));t=(page*48+j+.5)*interval
+                draw.text((x+3,y+182),f'{t:.2f}s / {int(t//60)}:{t%60:05.2f}',fill='white')
+              im.save(out/f'contact_{page}.jpg',quality=88)
+            for f in files:f.unlink()
+          for ip in out.glob('*.info.json'):
+            data=json.loads(ip.read_text());ip.write_text(json.dumps({k:data.get(k) for k in ['id','title','description','uploader','duration','webpage_url','width','height','fps']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canberra-inspection-proxy
+          path: canberra_inspect/
+          compression-level: 0
+          retention-days: 2

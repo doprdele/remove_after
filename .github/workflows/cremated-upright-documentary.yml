@@ -1,0 +1,55 @@
+name: cremated-upright-documentary
+on:
+  push:
+    branches: [chatgpt-cremated-upright-20260905]
+    paths: ['.github/workflows/cremated-upright-documentary.yml']
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Retrieve and inspect public films
+        run: |
+          python -u - <<'PY'
+          from pathlib import Path
+          code=Path('cremated-reel/fetch_active_cremation_v2.py').read_text()
+          exec(code[:code.index('with cf.ThreadPoolExecutor')])
+          OUT=Path('upright_documentaries');OUT.mkdir(exist_ok=True)
+          items=[('postmortem','https://player.vimeo.com/video/449756283'),('mountauburn','https://player.vimeo.com/video/914843018')]
+          with cf.ThreadPoolExecutor(max_workers=2) as pool:print(list(pool.map(get,items)))
+          PY
+      - name: Review files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-documentary-review
+          path: |
+            upright_documentaries/**/*.jpg
+            upright_documentaries/**/*.json
+            upright_documentaries/**/*.log
+          retention-days: 2
+      - name: Media files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-documentary-media
+          path: |
+            upright_documentaries/**/*.mp4
+            upright_documentaries/**/*.mkv
+            upright_documentaries/**/*.webm
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

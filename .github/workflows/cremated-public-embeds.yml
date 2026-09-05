@@ -1,0 +1,33 @@
+name: cremated-public-embeds
+on:
+  push:
+    branches: [chatgpt-cremated-reel-20260905]
+    paths: ['cremated-reel/fetch_public_embeds.py', '.github/workflows/cremated-public-embeds.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Retrieve public sources
+        run: python -u cremated-reel/fetch_public_embeds.py
+      - name: Preserve sources and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cremated-public-sources
+          path: cremated_public_sources/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error

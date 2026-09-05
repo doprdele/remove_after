@@ -1,0 +1,67 @@
+name: cremated-upright-final-source-pass
+on:
+  push:
+    branches: [chatgpt-cremated-upright-20260905]
+    paths: ['.github/workflows/cremated-upright-final-source-pass.yml']
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Retrieve public films
+        run: |
+          python -u - <<'PY'
+          from pathlib import Path
+          import re,html,json
+          from curl_cffi import requests
+          code=Path('cremated-reel/fetch_active_cremation_v2.py').read_text()
+          code=code[:code.index('with cf.ThreadPoolExecutor')]
+          code=code.replace("'--impersonate','chrome','--write-info-json',", "'--js-runtimes','node','--remote-components','ejs:github','--write-info-json',")
+          exec(code)
+          OUT=Path('final_candidates');OUT.mkdir(exist_ok=True)
+          items=[('ruhe','https://vimeo.com/301443287'),('dfw','https://www.youtube.com/watch?v=T-axoGCNKEU'),('greenlane','https://www.youtube.com/watch?v=fEOqq3z2rbc')]
+          page='https://www.epd-video.de/themen/beitrag/vom-tod-bis-zur-urnenbestattung-das-passiert-im-krematorium'
+          r=requests.get(page,impersonate='chrome',timeout=30)
+          urls=re.findall(r'https?://player\.vimeo\.com/video/\d+[^\"<>\s]*',html.unescape(r.text))
+          (OUT/'epd_public_embed_urls.json').write_text(json.dumps(urls,indent=2))
+          if urls:items.append(('epd_published_embed',urls[0]))
+          items.append(('epd_page',page))
+          with cf.ThreadPoolExecutor(max_workers=3) as pool:print(list(pool.map(get,items)))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-final-pass-review
+          path: |
+            final_candidates/**/*.jpg
+            final_candidates/**/*.json
+            final_candidates/**/*.log
+            final_candidates/*.json
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-final-pass-media
+          path: |
+            final_candidates/**/*.mp4
+            final_candidates/**/*.mkv
+            final_candidates/**/*.webm
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

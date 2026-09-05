@@ -1,0 +1,65 @@
+name: cremated-upright-german-films
+on:
+  push:
+    branches: [chatgpt-cremated-upright-20260905]
+    paths: ['.github/workflows/cremated-upright-german-films.yml']
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Retrieve public films
+        run: |
+          python -u - <<'PY'
+          from pathlib import Path
+          import re,json
+          from curl_cffi import requests
+          code=Path('cremated-reel/fetch_active_cremation_v2.py').read_text()
+          exec(code[:code.index('with cf.ThreadPoolExecutor')])
+          OUT=Path('upright_german');OUT.mkdir(exist_ok=True)
+          items=[('ein_tag','https://player.vimeo.com/video/437123720'),('letzte_wege','https://player.vimeo.com/video/49175053'),('letzte_ruhe','https://player.vimeo.com/video/301443287'),('nordheim','https://player.vimeo.com/video/44369322')]
+          url='https://www.epd-video.de/themen/beitrag/vom-tod-bis-zur-urnenbestattung-das-passiert-im-krematorium'
+          try:
+            r=requests.get(url,impersonate='chrome',timeout=30)
+            (OUT/'epd_public.html').write_text(r.text)
+            ids=list(dict.fromkeys(re.findall(r'player\.vimeo\.com/video/(\d+)',r.text)))
+            (OUT/'epd_embeds.json').write_text(json.dumps(ids))
+            for i,vid in enumerate(ids[:2]):items.append(('epd'+str(i),'https://player.vimeo.com/video/'+vid))
+          except Exception as e:(OUT/'epd_error.log').write_text(str(e))
+          with cf.ThreadPoolExecutor(max_workers=3) as pool:print(list(pool.map(get,items)))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-german-review
+          path: |
+            upright_german/**/*.jpg
+            upright_german/**/*.json
+            upright_german/**/*.log
+            upright_german/*.json
+            upright_german/*.html
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upright-german-media
+          path: |
+            upright_german/**/*.mp4
+            upright_german/**/*.mkv
+            upright_german/**/*.webm
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

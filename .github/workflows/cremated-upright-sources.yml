@@ -1,0 +1,103 @@
+name: cremated-upright-source-review
+on:
+  push:
+    branches: [chatgpt-cremated-upright-20260905]
+    paths: ['.github/workflows/cremated-upright-sources.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Acquire publicly playable candidates
+        run: |
+          python -u - <<'PY'
+          from pathlib import Path
+          import json, subprocess as sp, sys, concurrent.futures as cf
+          from curl_cffi import requests
+          OUT=Path('upright_candidates'); OUT.mkdir(exist_ok=True)
+          SOURCES=[
+            ('canberra','https://player.vimeo.com/video/842357988?app_id=58479&autopause=0&badge=0&player_id=0'),
+            ('bali_fire','https://player.vimeo.com/video/1107488128'),
+            ('bali_fuel','https://player.vimeo.com/video/1107486154'),
+            ('dfw_furnace','https://www.youtube.com/watch?v=T-axoGCNKEU'),
+            ('dfw_charge','https://www.youtube.com/watch?v=ApxLgbQYvxE'),
+            ('greenlane','https://www.youtube.com/watch?v=fEOqq3z2rbc')]
+          def job(item):
+            key,url=item; d=OUT/key; d.mkdir(exist_ok=True)
+            logfile=[]
+            try:
+              if key=='canberra':
+                config='https://player.vimeo.com/video/842357988/config'
+                r=requests.get(config,impersonate='chrome',headers={'Referer':'https://www.canberramemorialparks.act.gov.au/'},timeout=30)
+                logfile.append('public config HTTP '+str(r.status_code))
+                if r.status_code==200:
+                  data=r.json(); fs=data.get('request',{}).get('files',{}).get('progressive',[])
+                  fs=[f for f in fs if f.get('height',0)>=1080]
+                  if fs:
+                    f=min(fs,key=lambda x:x['height'])
+                    sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',f['url'],'-map','0:v:0','-an','-c','copy',str(d/'source.mp4')],check=True,timeout=220)
+              if not list(d.glob('*.mp4')):
+                cmd=[sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','--socket-timeout','20','--retries','1','--fragment-retries','1','--impersonate','chrome','--write-info-json','-f','best[height=1080]/bestvideo[height=1080]/best[height>=1080][height<=2160]/bestvideo[height>=1080][height<=2160]','--match-filter','duration < 1200','-o',str(d/'source.%(ext)s'),url]
+                p=sp.run(cmd,stdout=sp.PIPE,stderr=sp.STDOUT,text=True,timeout=230)
+                logfile.append(p.stdout)
+              media=[p for p in d.glob('source.*') if p.suffix in ('.mp4','.webm','.mkv','.mov')]
+              if not media:
+                return False
+              p=media[0]
+              probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(p)]))
+              video=next(s for s in probe['streams'] if s['codec_type']=='video')
+              if video['height']<1080: raise ValueError('Source is below requested 1080p')
+              (d/'provenance.json').write_text(json.dumps({'url':url,'probe':probe},indent=2))
+              duration=float(probe['format']['duration']); interval=max(duration/96,.25)
+              for page in range(2):
+                vf=f'fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text=%{{pts\\:hms}}:fontsize=16:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=6x8:padding=2:margin=2'
+                sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-ss',str(page*duration/2),'-i',str(p),'-t',str(duration/2),'-vf',vf,'-frames:v','1',str(d/f'contact_{page}.jpg')],check=True,timeout=150)
+              (d/'timing.json').write_text(json.dumps({'duration':duration,'interval':interval,'page_duration':duration/2}))
+              return True
+            except Exception as e:
+              logfile.append(str(type(e).__name__)+': '+str(e)); return False
+            finally:
+              (d/'download.log').write_text('\n'.join(logfile))
+              for ip in d.glob('*.info.json'):
+                data=json.loads(ip.read_text()); ip.write_text(json.dumps({k:data.get(k) for k in ['id','title','description','uploader','duration','webpage_url','width','height','fps']},indent=2))
+              print(key,'complete',flush=True)
+          with cf.ThreadPoolExecutor(max_workers=3) as ex: result=list(ex.map(job,SOURCES))
+          (OUT/'summary.json').write_text(json.dumps(dict(zip([s[0] for s in SOURCES],result)),indent=2))
+          print(result)
+          PY
+      - name: Upload inspection sheets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upright-source-review
+          path: |
+            upright_candidates/**/*.jpg
+            upright_candidates/**/*.json
+            upright_candidates/**/*.log
+          retention-days: 2
+      - name: Upload source media
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upright-source-media
+          path: |
+            upright_candidates/**/*.mp4
+            upright_candidates/**/*.webm
+            upright_candidates/**/*.mkv
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

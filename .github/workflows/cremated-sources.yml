@@ -1,0 +1,36 @@
+name: cremated-sources
+on:
+  push:
+    branches: [chatgpt-cremated-reel-20260905]
+    paths: ['cremated-reel/fetch_sources.py', '.github/workflows/cremated-sources.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install yt-dlp and FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' requests
+      - name: Retrieve recording and inspectable HD candidates
+        run: python -u cremated-reel/fetch_sources.py
+      - name: Preserve footage and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cremated-sources
+          path: cremated_sources/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error

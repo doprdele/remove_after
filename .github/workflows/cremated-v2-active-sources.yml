@@ -1,0 +1,33 @@
+name: cremated-v2-active-sources
+on:
+  push:
+    branches: [chatgpt-cremated-reel-v2-20260905]
+    paths: ['cremated-reel/fetch_active_cremation_v2.py', '.github/workflows/cremated-v2-active-sources.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install yt-dlp and FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi
+      - name: Retrieve documentary HD candidates
+        run: python -u cremated-reel/fetch_active_cremation_v2.py
+      - name: Preserve candidates for visual inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cremated-v2-active-sources
+          path: active_cremation_v2/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error

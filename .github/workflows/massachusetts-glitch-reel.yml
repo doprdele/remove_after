@@ -14,23 +14,28 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install media stack
+      - name: Install media stack and PO-token provider
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg python3-opencv python3-numpy
-          python3 -m pip install --upgrade yt-dlp
+          python3 -m pip install --upgrade yt-dlp bgutil-ytdlp-pot-provider
           node --version
-      - name: Configure yt-dlp embedded client
+          git clone --depth 1 --branch 1.3.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git "$RUNNER_TEMP/bgutil-ytdlp-pot-provider"
+          cd "$RUNNER_TEMP/bgutil-ytdlp-pot-provider/server"
+          npm ci
+          npx tsc
+      - name: Configure yt-dlp with PO-token provider
         run: |
           REAL_YTDLP="$(command -v yt-dlp)"
+          PROVIDER_HOME="$RUNNER_TEMP/bgutil-ytdlp-pot-provider/server"
           mkdir -p "$RUNNER_TEMP/ytdlp-bin"
           printf '%s\n' \
             '#!/usr/bin/env bash' \
-            "exec \"$REAL_YTDLP\" --extractor-args 'youtube:player_client=web_embedded;skip=hls' --js-runtimes node --remote-components ejs:github \"\$@\"" \
+            "exec \"$REAL_YTDLP\" --extractor-args 'youtube:player_client=mweb' --extractor-args \"youtubepot-bgutilscript:server_home=$PROVIDER_HOME\" --js-runtimes node --remote-components ejs:github \"\$@\"" \
             > "$RUNNER_TEMP/ytdlp-bin/yt-dlp"
           chmod +x "$RUNNER_TEMP/ytdlp-bin/yt-dlp"
           echo "$RUNNER_TEMP/ytdlp-bin" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/ytdlp-bin/yt-dlp" --version
+          "$RUNNER_TEMP/ytdlp-bin/yt-dlp" -v --skip-download 'https://www.youtube.com/watch?v=85d6sxqJcQ0' | tail -40
       - name: Patch final emotional beat
         run: |
           python3 - <<'PY'

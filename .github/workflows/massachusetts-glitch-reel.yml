@@ -1,0 +1,32 @@
+name: Massachusetts Glitch Reel
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'reel_build/build_glitch_massachusetts.py'
+      - '.github/workflows/massachusetts-glitch-reel.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install media stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3-opencv python3-numpy
+          python3 -m pip install --upgrade yt-dlp
+      - name: Build reel
+        run: python3 reel_build/build_glitch_massachusetts.py
+      - name: Upload reel
+        uses: actions/upload-artifact@v4
+        with:
+          name: massachusetts-glitch-separation-reel
+          path: |
+            reel_build/output/massachusetts_glitch_separation_reel.mp4
+            reel_build/build_glitch_massachusetts.py
+          if-no-files-found: error
+          retention-days: 7

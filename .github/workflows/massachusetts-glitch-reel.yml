@@ -19,6 +19,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg python3-opencv python3-numpy
           python3 -m pip install --upgrade yt-dlp
+          node --version
+      - name: Configure yt-dlp embedded client
+        run: |
+          REAL_YTDLP="$(command -v yt-dlp)"
+          mkdir -p "$RUNNER_TEMP/ytdlp-bin"
+          cat > "$RUNNER_TEMP/ytdlp-bin/yt-dlp" <<EOF
+          #!/usr/bin/env bash
+          exec "$REAL_YTDLP" --extractor-args 'youtube:player_client=web_embedded;skip=hls' --js-runtimes node --remote-components ejs:github "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/ytdlp-bin/yt-dlp"
+          echo "$RUNNER_TEMP/ytdlp-bin" >> "$GITHUB_PATH"
       - name: Patch final emotional beat
         run: |
           python3 - <<'PY'

@@ -19,6 +19,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg python3-opencv python3-numpy
           python3 -m pip install --upgrade yt-dlp
+      - name: Patch final emotional beat
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('reel_build/build_glitch_massachusetts.py')
+          s=p.read_text()
+          old="Shot(30,'castle',5,.62,'washed','full','separated',3,0),"
+          new="Shot(30,'shinji',4,.48,'mono','full','separated',4,3),\nShot(30,'castle',5,.62,'washed','full','separated',3,0),"
+          if new not in s:
+              if old not in s: raise SystemExit('timeline anchor not found')
+              s=s.replace(old,new)
+          p.write_text(s)
+          print('timeline patched')
+          PY
       - name: Build reel
         run: python3 reel_build/build_glitch_massachusetts.py
       - name: Upload reel

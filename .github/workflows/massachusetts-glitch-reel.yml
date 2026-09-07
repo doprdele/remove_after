@@ -24,12 +24,13 @@ jobs:
         run: |
           REAL_YTDLP="$(command -v yt-dlp)"
           mkdir -p "$RUNNER_TEMP/ytdlp-bin"
-          cat > "$RUNNER_TEMP/ytdlp-bin/yt-dlp" <<EOF
-          #!/usr/bin/env bash
-          exec "$REAL_YTDLP" --extractor-args 'youtube:player_client=web_embedded;skip=hls' --js-runtimes node --remote-components ejs:github "$@"
-          EOF
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            "exec \"$REAL_YTDLP\" --extractor-args 'youtube:player_client=web_embedded;skip=hls' --js-runtimes node --remote-components ejs:github \"\$@\"" \
+            > "$RUNNER_TEMP/ytdlp-bin/yt-dlp"
           chmod +x "$RUNNER_TEMP/ytdlp-bin/yt-dlp"
           echo "$RUNNER_TEMP/ytdlp-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/ytdlp-bin/yt-dlp" --version
       - name: Patch final emotional beat
         run: |
           python3 - <<'PY'

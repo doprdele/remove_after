@@ -1,0 +1,46 @@
+name: youtube-runner-pool-probe
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/youtube-runner-pool-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install yt-dlp
+        shell: bash
+        run: |
+          python -m pip install --upgrade 'yt-dlp[default]'
+          mkdir -p ytprobe
+          python -m yt_dlp --version > ytprobe/version.txt
+      - name: Probe public YouTube clients
+        shell: bash
+        run: |
+          set +e
+          ID=Cu2J8zRftJE
+          for client in default web_safari android_vr ios; do
+            echo "===== $client =====" >> ytprobe/probe.log
+            if [ "$client" = default ]; then
+              timeout_cmd=''
+              python -m yt_dlp -v --no-playlist --socket-timeout 25 --retries 1 --skip-download -F "https://www.youtube.com/watch?v=$ID" >> ytprobe/probe.log 2>&1
+            else
+              python -m yt_dlp -v --no-playlist --socket-timeout 25 --retries 1 --extractor-args "youtube:player_client=$client" --skip-download -F "https://www.youtube.com/watch?v=$ID" >> ytprobe/probe.log 2>&1
+            fi
+            echo "RETURN=$?" >> ytprobe/probe.log
+          done
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-probe-${{ matrix.os }}
+          path: ytprobe/
+          retention-days: 2

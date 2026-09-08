@@ -1,0 +1,55 @@
+name: covid-pot-v2-test
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-pot-v2-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install matched current provider
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg curl
+          python -m pip install --upgrade 'yt-dlp[default]' bgutil-ytdlp-pot-provider
+          docker pull brainicism/bgutil-ytdlp-pot-provider:latest
+          docker run --name bgutil-provider -d --init --network host brainicism/bgutil-ytdlp-pot-provider:latest
+          sleep 8
+          docker logs bgutil-provider | tail -100
+          yt-dlp --version
+      - name: Verify current provider and test public videos
+        shell: bash
+        run: |
+          set +e
+          mkdir -p pot2
+          NODE_BIN=$(command -v node)
+          COMMON=(yt-dlp -v --no-playlist --force-ipv4 --socket-timeout 30 --retries 3 --fragment-retries 3 --js-runtimes "node:$NODE_BIN" \
+            --extractor-args 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416' \
+            --extractor-args 'youtube:player_client=mweb,web;fetch_pot=always;formats=missing_pot')
+          for id in mGGjRtSZrMo Cu2J8zRftJE vapEyLYgdDU aBoaCHKJKd8; do
+            echo "===== $id =====" | tee -a pot2/test.log
+            "${COMMON[@]}" --skip-download -F "https://www.youtube.com/watch?v=$id" >> pot2/test.log 2>&1
+            rc=$?
+            echo "RETURN=$rc" | tee -a pot2/test.log
+          done
+          # Try one tiny media section to prove actual GVS playback, not just metadata.
+          "${COMMON[@]}" --download-sections '*0-4' --force-keyframes-at-cuts \
+             -f 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' --merge-output-format mp4 \
+             -o 'pot2/media_test.%(ext)s' 'https://www.youtube.com/watch?v=Cu2J8zRftJE' >>pot2/test.log 2>&1
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height -of json pot2/media_test.mp4 >pot2/probe.json 2>>pot2/test.log || true
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-pot-v2-test
+          path: pot2/
+          retention-days: 2

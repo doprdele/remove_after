@@ -1,0 +1,138 @@
+name: covid-pot-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-pot-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install yt-dlp PO-token toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg curl fonts-dejavu-core tesseract-ocr
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'yt-dlp[default]' bgutil-ytdlp-pot-provider pillow
+          docker pull brainicism/bgutil-ytdlp-pot-provider:1.3.2
+          docker run --name bgutil-provider -d --init --network host brainicism/bgutil-ytdlp-pot-provider:1.3.2
+          sleep 8
+          curl -fsS http://127.0.0.1:4416/ >/dev/null || true
+          yt-dlp --version
+      - name: Retrieve song and review proxies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pot_review/{song,er,pyres,ventilator}
+          NODE_BIN=$(command -v node)
+          POT_ARGS='youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416;youtube:player_client=mweb'
+          YTD=(yt-dlp --no-playlist --force-ipv4 --retries 6 --fragment-retries 6 --socket-timeout 45 --js-runtimes "node:$NODE_BIN" --extractor-args "$POT_ARGS")
+          SONG='https://www.youtube.com/watch?v=mGGjRtSZrMo'
+          "${YTD[@]}" --dump-single-json --skip-download "$SONG" > pot_review/song/metadata.json
+          "${YTD[@]}" -f 'bestaudio/best' -x --audio-format wav --audio-quality 0 -o 'pot_review/song/song.%(ext)s' "$SONG"
+          "${YTD[@]}" -f 'bestvideo[height<=480]+bestaudio/best[height<=480]/best' --merge-output-format mp4 -o 'pot_review/song/lyrics_proxy.%(ext)s' "$SONG"
+          "${YTD[@]}" --skip-download --write-subs --write-auto-subs --sub-langs 'en.*,en' --sub-format vtt -o 'pot_review/song/caption.%(ext)s' "$SONG" || true
+          
+          cat > /tmp/probe.sh <<'SH'
+          probe_one(){
+            cat="$1"; id="$2"; limit="$3"; d="pot_review/$cat/$id"; mkdir -p "$d"
+            url="https://www.youtube.com/watch?v=$id"
+            "${YTD[@]}" --write-info-json --download-sections "*0-$limit" --force-keyframes-at-cuts \
+              -f 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' --merge-output-format mp4 \
+              -o "$d/source.%(ext)s" "$url" >"$d/download.log" 2>&1 || return 0
+            src=$(find "$d" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.webm' -o -name '*.mkv' \) | head -n1)
+            [ -s "$src" ] || return 0
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json "$src" > "$d/probe.json"
+            dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src")
+            vf="fps=1/4,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='%{pts\\:hms}':x=6:y=6:fontsize=16:fontcolor=white:borderw=2:bordercolor=black,tile=8x8:padding=3:margin=3:color=black"
+            ffmpeg -y -hide_banner -loglevel error -i "$src" -vf "$vf" -frames:v 1 -q:v 2 "$d/contact.jpg" || true
+          }
+          SH
+          source /tmp/probe.sh
+          export -f probe_one
+          # Execute serially to keep provider stable.
+          probe_one er Cu2J8zRftJE 140
+          probe_one er slO6Rf8vGzo 240
+          probe_one er zRyWFj-lygc 240
+          probe_one pyres vapEyLYgdDU 110
+          probe_one pyres GwPE1vjpifs 105
+          probe_one pyres 1RKIVFMzAiY 90
+          probe_one ventilator aBoaCHKJKd8 240
+          probe_one ventilator Xe-4p295SkY 200
+          probe_one ventilator ixVMVupntGQ 225
+          # Remove review media after contact sheets to keep artifact small.
+          find pot_review/{er,pyres,ventilator} -type f \( -name '*.mp4' -o -name '*.webm' -o -name '*.mkv' \) -delete
+      - name: Sanitize metadata and analyze song timing
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,re,html,glob,subprocess as sp
+          from pathlib import Path
+          s=Path('pot_review/song')
+          d=json.loads((s/'metadata.json').read_text())
+          keep={k:d.get(k) for k in ['id','title','uploader','duration','webpage_url','width','height','fps']}
+          keep['subtitle_languages']=sorted(set((d.get('subtitles') or {}).keys())|set((d.get('automatic_captions') or {}).keys()))
+          (s/'metadata.json').write_text(json.dumps(keep,indent=2,ensure_ascii=False))
+          # Store full English caption text only in an internal review artifact; it will not be shipped in the final deliverable.
+          cues=[]
+          for p in s.glob('caption*.vtt'):
+            lines=p.read_text(errors='ignore').splitlines();i=0
+            while i<len(lines):
+              if '-->' in lines[i]:
+                timing=lines[i].strip();i+=1;body=[]
+                while i<len(lines) and lines[i].strip():body.append(re.sub('<[^>]+>','',lines[i]));i+=1
+                txt=re.sub(r'\s+',' ',html.unescape(' '.join(body))).strip()
+                if txt:cues.append({'timing':timing,'text':txt})
+              i+=1
+            p.unlink(missing_ok=True)
+          (s/'english_caption_internal.json').write_text(json.dumps(cues,indent=2,ensure_ascii=False))
+          # If no English CC exists, preserve screen-change timing from the original lyric video so paraphrases can still follow the vocal phrasing.
+          proxy=next(s.glob('lyrics_proxy.*'))
+          sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(proxy),'-vf','fps=4,scale=640:-2,format=gray','-f','rawvideo',str(s/'gray.raw')],check=True)
+          probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-of','json',str(proxy)]));v=next(x for x in probe['streams'] if x['codec_type']=='video');w=640;h=round(int(v['height'])*640/int(v['width']));h+=h%2
+          import numpy as np
+          raw=np.fromfile(s/'gray.raw',dtype=np.uint8);cnt=len(raw)//(w*h);raw=raw[:cnt*w*h].reshape(cnt,h,w);(s/'gray.raw').unlink()
+          changes=[];prev=None
+          for i,im in enumerate(raw):
+            roi=im[int(h*.18):int(h*.88)];edge=np.abs(np.diff(roi.astype(np.int16),axis=1)).mean(axis=0);sig=(edge>12).astype(np.uint8)
+            if prev is not None:
+              score=float(np.mean(sig!=prev))
+              if score>.13 and (not changes or i/4-changes[-1]['t']>.45):changes.append({'t':round(i/4,2),'score':round(score,3)})
+            prev=sig
+          (s/'lyric_screen_changes.json').write_text(json.dumps(changes,indent=2))
+          PY
+      - name: Upload review sheets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-pot-review
+          path: |
+            pot_review/**/*.json
+            pot_review/**/*.jpg
+            pot_review/**/*.log
+          retention-days: 2
+      - name: Upload song media
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-pot-song-media
+          path: |
+            pot_review/song/*.wav
+            pot_review/song/lyrics_proxy.*
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

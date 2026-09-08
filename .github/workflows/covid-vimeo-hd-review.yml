@@ -1,0 +1,63 @@
+name: covid-vimeo-hd-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-vimeo-hd-review.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]'
+      - name: Acquire review proxies and metadata
+        run: |
+          python -u - <<'PY'
+          import subprocess as sp,json,sys,concurrent.futures as cf
+          from pathlib import Path
+          out=Path('vimeo_hd');out.mkdir(exist_ok=True)
+          sources={
+            'er_fargo':'https://vimeo.com/606841356',
+            'er_sanford':'https://vimeo.com/480847093',
+            'icu_proning':'https://vimeo.com/442529849',
+            'vent_neil':'https://vimeo.com/458291983',
+            'vent_charlotte':'https://vimeo.com/427605981',
+            'india_covid_pyres':'https://vimeo.com/541641527',
+            'varanasi_pyres':'https://vimeo.com/115426291',
+            'cremation_trailer':'https://vimeo.com/649008409'
+          }
+          def one(k,u):
+            d=out/k;d.mkdir(exist_ok=True)
+            try:
+              info=json.loads(sp.check_output([sys.executable,'-m','yt_dlp','--no-playlist','--dump-single-json','--skip-download',u],text=True,timeout=120))
+              fs=[f for f in info.get('formats',[]) if f.get('vcodec') not in (None,'none')]
+              maxh=max([int(f.get('height') or 0) for f in fs] or [0])
+              meta={x:info.get(x) for x in ['id','title','duration','uploader','webpage_url','width','height','fps']};meta['max_height']=maxh
+              (d/'metadata.json').write_text(json.dumps(meta,indent=2,ensure_ascii=False))
+              sp.run([sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','-f','best[height<=540]/worst','--merge-output-format','mp4','-o',str(d/'proxy.%(ext)s'),u],check=True,timeout=360)
+              p=next(x for x in d.iterdir() if x.name.startswith('proxy.') and x.suffix in ['.mp4','.mkv','.webm'])
+              probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(p)]));dur=float(probe['format']['duration'])
+              interval=max(dur/80,.4)
+              vf=f"fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{pts\\:hms}}':fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=8x10:padding=2:margin=2"
+              sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(p),'-vf',vf,'-frames:v','1',str(d/'contact.jpg')],check=True,timeout=180)
+              return k,{'ok':True,'max_height':maxh,'duration':dur}
+            except Exception as e:
+              (d/'error.log').write_text(type(e).__name__+': '+str(e));return k,{'ok':False,'error':str(e)}
+          with cf.ThreadPoolExecutor(max_workers=4) as ex: rows=dict(ex.map(lambda kv:one(*kv),sources.items()))
+          (out/'summary.json').write_text(json.dumps(rows,indent=2));print(json.dumps(rows,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-vimeo-hd-review
+          path: vimeo_hd/
+          compression-level: 0
+          retention-days: 2

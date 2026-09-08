@@ -1,0 +1,146 @@
+name: covid-invidious-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-invidious-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr
+          python -m pip install --upgrade curl-cffi pillow
+      - name: Retrieve through public Invidious instances
+        run: |
+          cat > /tmp/inv.py <<'PY'
+          from pathlib import Path
+          from curl_cffi import requests
+          import json, subprocess as sp, re, html, math, os, time
+          from PIL import Image,ImageDraw
+          OUT=Path('invidious_review');OUT.mkdir(exist_ok=True)
+          IDS={
+            'song':['mGGjRtSZrMo'],
+            'er':['Cu2J8zRftJE','slO6Rf8vGzo','zRyWFj-lygc'],
+            'pyres':['vapEyLYgdDU','GwPE1vjpifs','1RKIVFMzAiY'],
+            'ventilator':['aBoaCHKJKd8','Xe-4p295SkY','ixVMVupntGQ','OSfLd05B_Sw']}
+          sess=requests.Session(impersonate='chrome')
+          raw=sess.get('https://api.invidious.io/instances.json',timeout=20).json()
+          instances=[]
+          for host,meta in raw:
+            if not isinstance(meta,dict): continue
+            uri=meta.get('uri') or ('https://'+host)
+            if not uri.startswith('https://'): continue
+            if '.onion' in uri or '.i2p' in uri: continue
+            if meta.get('api') is False: continue
+            instances.append(uri.rstrip('/'))
+          # Known public instances first if present.
+          preferred=['https://inv.nadeko.net','https://yewtu.be','https://invidious.nerdvpn.de','https://invidious.private.coffee','https://inv.us.projectsegfau.lt']
+          instances=list(dict.fromkeys(preferred+instances))
+          cache={}
+          def resolve(vid):
+            if vid in cache:return cache[vid]
+            errors=[]
+            for base in instances[:45]:
+              try:
+                r=sess.get(base+'/api/v1/videos/'+vid,timeout=6)
+                if r.status_code==200 and r.text.startswith('{'):
+                  d=r.json()
+                  if d.get('adaptiveFormats') or d.get('formatStreams'):
+                    cache[vid]=(base,d);return cache[vid]
+                errors.append(base+':'+str(r.status_code))
+              except Exception as e:errors.append(base+':'+type(e).__name__)
+            raise RuntimeError('No Invidious API succeeded: '+','.join(errors[-15:]))
+          def media_url(base,vid,fmt):
+            itag=fmt.get('itag')
+            # Proxy through the Invidious instance when possible; avoids runner/Google IP binding.
+            if itag is not None:return f'{base}/latest_version?id={vid}&itag={itag}&local=true'
+            return fmt.get('url')
+          def download(url,path):
+            with sess.get(url,stream=True,timeout=45,allow_redirects=True) as r:
+              r.raise_for_status()
+              with open(path,'wb') as f:
+                for ch in r.iter_content(1024*1024):
+                  if ch:f.write(ch)
+          def choose_proxy(d):
+            fs=d.get('formatStreams') or []
+            if fs:
+              return min(fs,key=lambda f:abs(int(re.sub(r'\D','',f.get('qualityLabel') or f.get('quality') or '360') or 360)-480))
+            vs=[f for f in d.get('adaptiveFormats',[]) if 'video' in (f.get('type') or '') and int(re.sub(r'\D','',f.get('qualityLabel') or '0') or 0)<=720]
+            return max(vs,key=lambda f:int(re.sub(r'\D','',f.get('qualityLabel') or '0') or 0))
+          def choose_audio(d):
+            af=[f for f in d.get('adaptiveFormats',[]) if 'audio' in (f.get('type') or '')]
+            return max(af,key=lambda f:int(f.get('bitrate') or 0))
+          summary={}
+          for cat,ids in IDS.items():
+            folder=OUT/cat;folder.mkdir(exist_ok=True)
+            for vid in ids:
+              ddir=folder/vid;ddir.mkdir(exist_ok=True)
+              try:
+                base,d=resolve(vid)
+                keep={k:d.get(k) for k in ['videoId','title','author','lengthSeconds','description']}
+                keep['instance']=base
+                (ddir/'metadata.json').write_text(json.dumps(keep,indent=2,ensure_ascii=False))
+                if cat=='song':
+                  a=choose_audio(d);url=media_url(base,vid,a)
+                  download(url,ddir/'song_audio.bin')
+                  # Low-res visual proxy for baked English translation OCR.
+                  p=choose_proxy(d);download(media_url(base,vid,p),ddir/'lyrics_proxy.mp4')
+                  # Probe and normalize audio container to WAV.
+                  sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(ddir/'song_audio.bin'),'-ar','48000','-ac','2',str(ddir/'song.wav')],check=True,timeout=180)
+                  (ddir/'song_audio.bin').unlink(missing_ok=True)
+                  proxy=ddir/'lyrics_proxy.mp4'
+                  probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(proxy)]));dur=float(probe['format']['duration']);step=.5
+                  frames=ddir/'frames';frames.mkdir(exist_ok=True)
+                  sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(proxy),'-vf',f'fps=1/{step},scale=854:-2','-q:v','3',str(frames/'%05d.jpg')],check=True,timeout=240)
+                  o=[]
+                  for idx,pth in enumerate(sorted(frames.glob('*.jpg'))):
+                    im=Image.open(pth);w,h=im.size;crop=frames/'crop.png';im.crop((0,int(h*.34),w,h)).save(crop)
+                    rr=sp.run(['tesseract',str(crop),'stdout','-l','eng','--psm','6'],stdout=sp.PIPE,stderr=sp.DEVNULL,text=True,timeout=20)
+                    txt=re.sub(r'\s+',' ',rr.stdout).strip()
+                    if txt:o.append({'t':round(idx*step,2),'text':txt})
+                    pth.unlink(missing_ok=True)
+                  (frames/'crop.png').unlink(missing_ok=True);frames.rmdir()
+                  (ddir/'translation_ocr_internal.json').write_text(json.dumps(o,indent=2,ensure_ascii=False))
+                  summary[vid]={'ok':True,'instance':base,'duration':dur}
+                else:
+                  p=choose_proxy(d);download(media_url(base,vid,p),ddir/'proxy.mp4')
+                  probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(ddir/'proxy.mp4')]));dur=float(probe['format']['duration'])
+                  interval=max(dur/60,.8)
+                  vf=f'fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text=%{{pts\\:hms}}:fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=6x10:padding=2:margin=2'
+                  sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(ddir/'proxy.mp4'),'-vf',vf,'-frames:v','1',str(ddir/'contact.jpg')],check=True,timeout=120)
+                  summary[vid]={'ok':True,'instance':base,'duration':dur,'title':d.get('title')}
+              except Exception as e:
+                (ddir/'error.log').write_text(type(e).__name__+': '+str(e));summary[vid]={'ok':False,'error':str(e)}
+          (OUT/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False))
+          print(json.dumps(summary,indent=2))
+          PY
+          python -u /tmp/inv.py
+      - name: Upload review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-invidious-review
+          path: |
+            invidious_review/**/*.json
+            invidious_review/**/*.jpg
+            invidious_review/**/*.log
+          retention-days: 2
+      - name: Upload song media
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-song-media
+          path: |
+            invidious_review/song/**/*.wav
+            invidious_review/song/**/lyrics_proxy.mp4
+          compression-level: 0
+          retention-days: 2

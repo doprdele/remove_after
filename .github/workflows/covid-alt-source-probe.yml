@@ -1,0 +1,65 @@
+name: covid-alt-source-probe
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-alt-source-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]'
+      - name: Probe and make review proxies
+        run: |
+          python -u - <<'PY'
+          import subprocess as sp,json,sys,concurrent.futures as cf
+          from pathlib import Path
+          out=Path('alt_probe');out.mkdir(exist_ok=True)
+          sources={
+            'icu_doc':'https://www.dailymotion.com/video/x8gqbug',
+            'icu_full':'https://www.dailymotion.com/video/x9ut340',
+            'icu_vent':'https://www.dailymotion.com/video/x9ut1se',
+            'india_pyres':'https://www.dailymotion.com/video/x80ndg6',
+            'delhi_pyres':'https://www.dailymotion.com/video/x81rfvr',
+            'oxygen_crisis':'https://www.dailymotion.com/video/x80sdsy',
+            'vimeo_icu':'https://vimeo.com/410591644',
+            'vimeo_proning':'https://vimeo.com/399059080',
+          }
+          def one(k,u):
+            d=out/k;d.mkdir(exist_ok=True)
+            try:
+              info=json.loads(sp.check_output([sys.executable,'-m','yt_dlp','--no-playlist','--dump-single-json','--skip-download',u],text=True,timeout=100))
+              fs=[f for f in info.get('formats',[]) if f.get('vcodec') not in (None,'none')]
+              maxh=max([int(f.get('height') or 0) for f in fs] or [0])
+              meta={x:info.get(x) for x in ['id','title','duration','uploader','webpage_url','width','height','fps']};meta['max_height']=maxh
+              (d/'metadata.json').write_text(json.dumps(meta,indent=2,ensure_ascii=False))
+              # Low-bandwidth proxy, preserving the whole timeline for review.
+              sp.run([sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','-f','best[height<=480]/worst','--merge-output-format','mp4','-o',str(d/'proxy.%(ext)s'),u],check=True,timeout=300)
+              p=next(x for x in d.iterdir() if x.name.startswith('proxy.') and x.suffix in ['.mp4','.mkv','.webm'])
+              probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(p)]));dur=float(probe['format']['duration'])
+              interval=max(dur/60,.5)
+              vf=f"fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{pts\\:hms}}':fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=6x10:padding=2:margin=2"
+              sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(p),'-vf',vf,'-frames:v','1',str(d/'contact.jpg')],check=True,timeout=180)
+              return k,{'ok':True,'max_height':maxh,'duration':dur}
+            except Exception as e:
+              (d/'error.log').write_text(type(e).__name__+': '+str(e));return k,{'ok':False,'error':str(e)}
+          with cf.ThreadPoolExecutor(max_workers=4) as ex:
+            rows=dict(ex.map(lambda kv:one(*kv),sources.items()))
+          (out/'summary.json').write_text(json.dumps(rows,indent=2));print(json.dumps(rows,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-alt-source-probe
+          path: alt_probe/
+          compression-level: 0
+          retention-days: 2

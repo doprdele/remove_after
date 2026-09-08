@@ -1,0 +1,59 @@
+name: covid-final-source-masters
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-final-source-masters.yml']
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg curl fonts-dejavu-core
+      - name: Fetch explicit 1080 renditions and make clean portrait masters
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p raw clean qc
+          ER='https://voa-video-ns.akamaized.net/pangeavideo/2020/07/6/69/695440d1-53bf-460e-9cc3-ea6c5b784472_1080p.mp4?cb=ed6b0fb17'
+          ICU='https://voa-video-ns.akamaized.net/pangeavideo/2021/01/6/62/622e76ef-ecc1-49a5-b958-29fa6a438cb8_1080p.mp4?cb=ed7869901'
+          PYRES='https://voa-video-ns.akamaized.net/pangeavideo/2021/05/2/26/26b1a252-6d4a-44e3-a4b9-2884f2978ec7_1080p.mp4?cb=ed8254caf'
+          curl -LfsS --retry 5 --retry-delay 2 "$ER" -o raw/er.mp4
+          curl -LfsS --retry 5 --retry-delay 2 "$ICU" -o raw/icu.mp4
+          curl -LfsS --retry 5 --retry-delay 2 "$PYRES" -o raw/pyres.mp4
+          for f in raw/*.mp4; do ffprobe -v error -select_streams v:0 -show_entries stream=width,height,codec_name,r_frame_rate -of json "$f"; done > qc/raw_probe.txt
+          grep -q '"width": 1920' qc/raw_probe.txt
+          grep -q '"height": 1080' qc/raw_probe.txt
+          # Tehran ICU: captions have cleared by 13s; this window is beds, severe patients, monitors and PPE.
+          ffmpeg -y -hide_banner -loglevel error -ss 13 -i raw/er.mp4 -t 42 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high clean/er.mp4
+          # London ICU: bedside treatment before the interview lower-thirds begin.
+          ffmpeg -y -hide_banner -loglevel error -ss 39 -i raw/icu.mp4 -t 15 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high clean/ventilator.mp4
+          # Delhi crisis: opening funeral-pyre sequence only, before the report cuts to hospital/oxygen material.
+          ffmpeg -y -hide_banner -loglevel error -ss 0 -i raw/pyres.mp4 -t 7 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high clean/pyres.mp4
+          # Every-frame-ish review boards of the exact final portrait crops.
+          for k in er ventilator pyres; do
+            dur=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 clean/$k.mp4)
+            fps=$(python -c "print(max(1,float('$dur')/24))")
+            ffmpeg -y -hide_banner -loglevel error -i clean/$k.mp4 -vf "fps=1/$fps,scale=270:480,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{pts\\:hms}':x=3:y=3:fontsize=16:fontcolor=white:box=1:boxcolor=black@0.8,tile=6x4:padding=3:margin=3" -frames:v 1 qc/${k}_clean_contact.jpg
+            ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,r_frame_rate -of json clean/$k.mp4 > qc/${k}_probe.json
+          done
+          cat > qc/provenance.json <<'JSON'
+          {
+            "er":{"page":"https://ir.voanews.com/a/episode_iran-corona-covid-19-310511/6084657.html","source_resolution":[1920,1080],"range":[13,55]},
+            "ventilator":{"page":"https://www.voanews.com/a/episode_britain-lockdown-hospitals-overwhelmed-new-covid-outbreak-4539136/6114246.html","source_resolution":[1920,1080],"range":[39,54]},
+            "pyres":{"page":"https://www.voanews.com/a/5880171.html","source_resolution":[1920,1080],"range":[0,7]},
+            "cleaning":"central 9:16 crop removes broadcaster corner marks; selected ranges avoid burned-in lower thirds"
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: covid-clean-1080-masters
+          path: |
+            clean/
+            qc/
+          compression-level: 0
+          retention-days: 2

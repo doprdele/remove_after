@@ -1,0 +1,121 @@
+name: covid-lyrics-source-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-lyrics-source-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow
+      - name: Acquire song, timing, OCR proxy, and source candidates
+        run: |
+          cat > /tmp/review.py <<'PY'
+          from pathlib import Path
+          import json, subprocess as sp, sys, re, html, os, math
+          from PIL import Image,ImageDraw
+          ROOT=Path('covid_lyrics_review'); ROOT.mkdir(exist_ok=True)
+          YTD=[sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','--socket-timeout','25','--retries','2','--fragment-retries','2','--js-runtimes','node','--remote-components','ejs:github']
+          song='https://www.youtube.com/watch?v=mGGjRtSZrMo'
+          def run(cmd,timeout=180):
+            return sp.run(cmd,stdout=sp.PIPE,stderr=sp.STDOUT,text=True,timeout=timeout)
+          sdir=ROOT/'song';sdir.mkdir(exist_ok=True)
+          # Audio + metadata
+          r=run(YTD+['--dump-single-json','--skip-download',song],150)
+          (sdir/'metadata_raw.log').write_text(r.stdout)
+          try:
+            data=json.loads(r.stdout[r.stdout.find('{'):])
+            keep={k:data.get(k) for k in ['id','title','uploader','duration','webpage_url','width','height','fps']}
+            keep['subtitle_languages']=sorted(set((data.get('subtitles') or {}).keys())|set((data.get('automatic_captions') or {}).keys()))
+            (sdir/'metadata.json').write_text(json.dumps(keep,indent=2,ensure_ascii=False))
+          except Exception as e:(sdir/'metadata_error.txt').write_text(str(e))
+          run(YTD+['-f','bestaudio/best','-x','--audio-format','wav','-o',str(sdir/'song.%(ext)s'),song],420)
+          # Low-res video for extracting the baked-in English translation. Raw OCR is for internal editorial use only.
+          run(YTD+['-f','best[height<=480]/bestvideo[height<=480]','-o',str(sdir/'lyrics_proxy.%(ext)s'),song],420)
+          proxy=next((p for p in sdir.glob('lyrics_proxy.*') if p.suffix in ('.mp4','.webm','.mkv')),None)
+          if proxy:
+            probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(proxy)]))
+            dur=float(probe['format']['duration']); step=.60
+            frames=sdir/'ocrframes';frames.mkdir(exist_ok=True)
+            sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(proxy),'-vf',f'fps=1/{step},scale=854:-2','-q:v','3',str(frames/'%05d.jpg')],check=True,timeout=240)
+            ocr=[]
+            for idx,p in enumerate(sorted(frames.glob('*.jpg'))):
+              # OCR bottom 58% first, then whole frame if empty.
+              im=Image.open(p); w,h=im.size; crop=frames/'crop.png'; im.crop((0,int(h*.38),w,h)).save(crop)
+              rr=run(['tesseract',str(crop),'stdout','-l','eng','--psm','6'],30)
+              txt=re.sub(r'\s+',' ',rr.stdout).strip()
+              if len(txt)<3:
+                rr=run(['tesseract',str(p),'stdout','-l','eng','--psm','6'],30);txt=re.sub(r'\s+',' ',rr.stdout).strip()
+              if txt:ocr.append({'t':round(idx*step,2),'text':txt})
+              p.unlink(missing_ok=True)
+            (frames/'crop.png').unlink(missing_ok=True);frames.rmdir()
+            (sdir/'english_translation_ocr_internal.json').write_text(json.dumps(ocr,ensure_ascii=False,indent=2))
+          searches={
+            'er':['inside covid ICU emergency room patients 2020 raw hospital footage','covid emergency department crowded patients hospital documentary 2020','covid ICU Bergamo hospital inside 2020'],
+            'pyres':['India covid mass cremation funeral pyres 2021 raw footage','Delhi covid funeral pyres 2021 raw video','India covid crematorium pyres 4K 2021'],
+            'ventilator':['covid ICU ventilator patients hospital documentary 2020 raw footage','covid patient on ventilator ICU 2020 hospital footage','inside covid ICU ventilators 2020 documentary']}
+          for cat,queries in searches.items():
+            cdir=ROOT/cat;cdir.mkdir(exist_ok=True); entries=[];seen=set()
+            for q in queries:
+              rr=run(YTD+['--flat-playlist','--dump-single-json','ytsearch12:'+q],150)
+              try:
+                d=json.loads(rr.stdout[rr.stdout.find('{'):])
+                for e in d.get('entries',[]):
+                  if e and e.get('id') and e.get('id') not in seen:
+                    seen.add(e['id']);entries.append(e)
+              except Exception:pass
+            simple=[{k:e.get(k) for k in ['id','title','duration','channel','url']} for e in entries[:18]]
+            (cdir/'search_results.json').write_text(json.dumps(simple,indent=2,ensure_ascii=False))
+            for n,e in enumerate(simple[:8]):
+              vid=e['id']; d=cdir/f'{n:02d}_{vid}';d.mkdir(exist_ok=True)
+              url='https://www.youtube.com/watch?v='+vid
+              rr=run(YTD+['-f','best[height<=480]/bestvideo[height<=480]','--match-filter','duration < 1200','-o',str(d/'source.%(ext)s'),url],260)
+              (d/'download.log').write_text(rr.stdout)
+              media=next((p for p in d.glob('source.*') if p.suffix in ('.mp4','.webm','.mkv')),None)
+              if not media:continue
+              try:
+                probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(media)]));dur=float(probe['format']['duration'])
+                (d/'probe.json').write_text(json.dumps(probe,indent=2))
+                interval=max(dur/48,1.0)
+                vf=f'fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text=%{{pts\\:hms}}:fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=6x8:padding=2:margin=2'
+                sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(media),'-vf',vf,'-frames:v','1',str(d/'contact.jpg')],check=True,timeout=120)
+              except Exception as ex:(d/'probe_error.txt').write_text(str(ex))
+          PY
+          python -u /tmp/review.py
+      - name: Upload review package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-lyrics-review
+          path: |
+            covid_lyrics_review/**/*.json
+            covid_lyrics_review/**/*.jpg
+            covid_lyrics_review/**/*.log
+          retention-days: 2
+      - name: Upload song audio and OCR proxy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-lyrics-song-media
+          path: |
+            covid_lyrics_review/song/*.wav
+            covid_lyrics_review/song/lyrics_proxy.*
+          compression-level: 0
+          retention-days: 2

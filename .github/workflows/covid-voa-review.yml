@@ -1,0 +1,76 @@
+name: covid-voa-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-voa-review.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]'
+      - name: Download 1080 masters and contact sheets
+        run: |
+          python -u - <<'PY'
+          import subprocess as sp,json,sys,concurrent.futures as cf
+          from pathlib import Path
+          out=Path('voa_review');out.mkdir(exist_ok=True)
+          sources={
+            'er_tehran':'https://ir.voanews.com/a/episode_iran-corona-covid-19-310511/6084657.html',
+            'icu_britain':'https://www.voanews.com/a/episode_britain-lockdown-hospitals-overwhelmed-new-covid-outbreak-4539136/6114246.html',
+            'ventilator_survivors':'https://www.voanews.com/a/5679185.html',
+            'ventilator_effects':'https://www.voanews.com/a/episode_lasting-coronavirus-effects-include-fatigue-muscle-pain-poor-balance-4501426/6113694.html',
+            'india_pyres':'https://www.voanews.com/a/5880171.html',
+            'india_pyres_alt':'https://www.voanews.com/a/episode_flames-rise-funeral-pyres-indian-families-mourn-covid-victims-4679056/6116489.html'
+          }
+          def one(k,u):
+            d=out/k;d.mkdir(exist_ok=True)
+            try:
+              info=json.loads(sp.check_output([sys.executable,'-m','yt_dlp','--no-playlist','--dump-single-json','--skip-download',u],text=True,timeout=120))
+              fs=[f for f in info.get('formats',[]) if f.get('vcodec') not in (None,'none')]
+              maxh=max([int(f.get('height') or 0) for f in fs] or [0])
+              (d/'metadata.json').write_text(json.dumps({x:info.get(x) for x in ['id','title','duration','uploader','webpage_url','width','height','fps']}|{'max_height':maxh},indent=2,ensure_ascii=False))
+              sp.run([sys.executable,'-m','yt_dlp','--no-playlist','--no-progress','-f','best[height>=1080]/bestvideo[height>=1080]/best','--merge-output-format','mp4','-o',str(d/'master.%(ext)s'),u],check=True,timeout=480)
+              p=next(x for x in d.iterdir() if x.name.startswith('master.') and x.suffix in ['.mp4','.mkv','.webm'])
+              probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(p)]));dur=float(probe['format']['duration'])
+              interval=max(dur/96,.35)
+              vf=f"fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{pts\\:hms}}':fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=8x12:padding=2:margin=2"
+              sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(p),'-vf',vf,'-frames:v','1',str(d/'contact.jpg')],check=True,timeout=180)
+              # portrait crop sheet to see what survives final vertical reframing
+              vf2=f"fps=1/{interval},crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=180:320,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{pts\\:hms}}':fontsize=14:fontcolor=white:box=1:boxcolor=black@0.8:x=2:y=2,tile=12x8:padding=2:margin=2"
+              sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(p),'-vf',vf2,'-frames:v','1',str(d/'portrait_contact.jpg')],check=True,timeout=180)
+              return k,{'ok':True,'max_height':maxh,'duration':dur}
+            except Exception as e:
+              (d/'error.log').write_text(type(e).__name__+': '+str(e));return k,{'ok':False,'error':str(e)}
+          with cf.ThreadPoolExecutor(max_workers=3) as ex: rows=dict(ex.map(lambda kv:one(*kv),sources.items()))
+          (out/'summary.json').write_text(json.dumps(rows,indent=2));print(json.dumps(rows,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-voa-review
+          path: |
+            voa_review/**/*.jpg
+            voa_review/**/*.json
+            voa_review/**/*.log
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-voa-media
+          path: |
+            voa_review/**/master.mp4
+            voa_review/**/master.mkv
+            voa_review/**/master.webm
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

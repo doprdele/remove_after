@@ -1,0 +1,58 @@
+name: covid-wpc-test
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-wpc-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser PO-token provider
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xvfb
+          python -m pip install --upgrade 'yt-dlp[default]' yt-dlp-getpot-wpc 'nodriver<0.51'
+          command -v google-chrome || command -v google-chrome-stable || command -v chromium || true
+          yt-dlp --version
+      - name: Test browser-backed PO tokens
+        shell: bash
+        run: |
+          set +e
+          mkdir -p wpc
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)
+          echo "CHROME=$CHROME" | tee wpc/test.log
+          Xvfb :99 -screen 0 1280x960x24 >wpc/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          sleep 2
+          NODE_BIN=$(command -v node)
+          ARGS=(yt-dlp -v --no-playlist --force-ipv4 --socket-timeout 45 --retries 3 --fragment-retries 3 --js-runtimes "node:$NODE_BIN" \
+            --extractor-args "youtubepot-wpc:browser_path=$CHROME" \
+            --extractor-args 'youtube:player_client=mweb;fetch_pot=always;formats=missing_pot')
+          for id in mGGjRtSZrMo Cu2J8zRftJE vapEyLYgdDU aBoaCHKJKd8; do
+            echo "===== $id =====" | tee -a wpc/test.log
+            timeout 150 "${ARGS[@]}" --skip-download -F "https://www.youtube.com/watch?v=$id" >>wpc/test.log 2>&1
+            echo "RETURN=$?" | tee -a wpc/test.log
+          done
+          timeout 180 "${ARGS[@]}" --download-sections '*0-4' --force-keyframes-at-cuts \
+            -f 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' --merge-output-format mp4 \
+            -o 'wpc/media_test.%(ext)s' 'https://www.youtube.com/watch?v=Cu2J8zRftJE' >>wpc/test.log 2>&1
+          echo "MEDIA_RETURN=$?" >>wpc/test.log
+          for f in wpc/media_test.*; do [ -s "$f" ] && ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height -of json "$f" > wpc/probe.json; done
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: covid-wpc-test
+          path: wpc/
+          compression-level: 0
+          retention-days: 2

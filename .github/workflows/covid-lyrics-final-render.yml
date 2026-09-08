@@ -1,0 +1,114 @@
+name: covid-lyrics-final-render
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-lyrics-final-render.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install render dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core curl zip
+          python -m pip install --upgrade 'yt-dlp[default]' numpy pillow opencv-python-headless
+          ffmpeg -version | head -2
+          python -m yt_dlp --version
+      - name: Acquire clean 1080 COVID masters and full audio
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd covid_lyrics_reel
+          mkdir -p assets qc output
+          ER='https://voa-video-ns.akamaized.net/pangeavideo/2020/07/6/69/695440d1-53bf-460e-9cc3-ea6c5b784472_1080p.mp4?cb=ed6b0fb17'
+          ICU='https://voa-video-ns.akamaized.net/pangeavideo/2021/01/6/62/622e76ef-ecc1-49a5-b958-29fa6a438cb8_1080p.mp4?cb=ed7869901'
+          PYRES='https://voa-video-ns.akamaized.net/pangeavideo/2021/05/2/26/26b1a252-6d4a-44e3-a4b9-2884f2978ec7_1080p.mp4?cb=ed8254caf'
+          mkdir -p raw
+          curl -LfsS --retry 5 --retry-delay 2 "$ER" -o raw/er.mp4
+          curl -LfsS --retry 5 --retry-delay 2 "$ICU" -o raw/icu.mp4
+          curl -LfsS --retry 5 --retry-delay 2 "$PYRES" -o raw/pyres.mp4
+          for f in raw/*.mp4; do
+            wh=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$f")
+            test "$wh" = '1920x1080'
+          done
+          ffmpeg -y -hide_banner -loglevel error -ss 13 -i raw/er.mp4 -t 42 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high assets/er.mp4
+          ffmpeg -y -hide_banner -loglevel error -ss 39 -i raw/icu.mp4 -t 15 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high assets/ventilator.mp4
+          ffmpeg -y -hide_banner -loglevel error -ss 0 -i raw/pyres.mp4 -t 7 -an -vf "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p" -c:v libx264 -preset veryfast -crf 17 -profile:v high assets/pyres.mp4
+          python -m yt_dlp --no-playlist --no-progress -f 'bestaudio/best' -x --audio-format wav -o 'assets/dogdog.%(ext)s' 'https://soundcloud.com/pika-lynx582/dogdog-abuse-ft-hatsune-miku'
+          ffprobe -v error -show_streams -show_format -of json assets/dogdog.wav > qc/audio_source_ffprobe.json
+          cat > qc/source_provenance.json <<'JSON'
+          {
+            "requested_song":"https://youtu.be/mGGjRtSZrMo",
+            "audio_retrieved":"https://soundcloud.com/pika-lynx582/dogdog-abuse-ft-hatsune-miku",
+            "er":{"page":"https://ir.voanews.com/a/episode_iran-corona-covid-19-310511/6084657.html","native_source":[1920,1080],"range":[13,55]},
+            "ventilator":{"page":"https://www.voanews.com/a/episode_britain-lockdown-hospitals-overwhelmed-new-covid-outbreak-4539136/6114246.html","native_source":[1920,1080],"range":[39,54]},
+            "pyres":{"page":"https://www.voanews.com/a/5880171.html","native_source":[1920,1080],"range":[0,7]},
+            "cleaning":"central 9:16 crops exclude broadcaster corner marks; time ranges were visually screened to avoid burned-in lower thirds",
+            "youtube_note":"Direct YouTube retrieval was attempted on Ubuntu, macOS and Windows GitHub runner pools but challenged with LOGIN_REQUIRED/bot verification; public 1080 VOA/USAGM masters are used for the requested COVID imagery."
+          }
+          JSON
+          rm -rf raw
+      - name: Render typography proof
+        run: |
+          cd covid_lyrics_reel
+          python build.py --preview
+      - name: Render full-song reel
+        run: |
+          cd covid_lyrics_reel
+          python -u build.py 2>&1 | tee output/render.log
+      - name: Final QC and reproducibility package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd covid_lyrics_reel
+          OUT=output/dogdog_covid_typography_reel.mp4
+          test -s "$OUT"
+          ffmpeg -v error -i "$OUT" -f null -
+          ffprobe -v error -count_frames -show_entries format=duration,size,bit_rate,start_time:stream=index,codec_type,codec_name,profile,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_rate,channels,start_time,duration,nb_frames,nb_read_frames -of json "$OUT" > qc/final_validation.json
+          python - <<'PY'
+          import json
+          d=json.load(open('qc/final_validation.json'));ss={s['codec_type']:s for s in d['streams']};v=ss['video'];a=ss['audio']
+          dur=float(d['format']['duration'])
+          assert abs(dur-350.946395)<.06,(dur,d)
+          assert (v['width'],v['height'])==(1080,1920),v
+          assert v['codec_name']=='h264' and v['pix_fmt']=='yuv420p',v
+          assert v['avg_frame_rate']=='60/1',v
+          assert a['codec_name']=='aac' and a['sample_rate']=='48000' and int(a['channels'])==2,a
+          assert abs(float(v.get('start_time') or 0)-float(a.get('start_time') or 0))<.03,(v,a)
+          print('FINAL QC PASS',dur,v.get('nb_read_frames'))
+          PY
+          ffmpeg -y -hide_banner -loglevel error -i "$OUT" -vf "fps=1/14,scale=216:384,tile=5x5:padding=3:margin=3" -frames:v 1 -q:v 2 qc/final_contact_sheet.jpg
+          cat > README_FINAL.txt <<'EOF'
+          DOGDOG / COVID TYPOGRAPHY REEL
+          Full-song upright kinetic typography using English thematic paraphrases rather than verbatim translated lyrics.
+          30% alternating COVID-era background: crowded ICU, Delhi funeral pyres, ventilator/critical-care footage.
+          Typography system: same 14 upright full-bleed treatments as WANT TO BE CREMATED v2; no rotation, wobble, pitch, shear or perspective.
+          Output: 1080x1920, 60fps, H.264 High, AAC 48k stereo, full-track duration.
+          EOF
+          zip -9 output/dogdog_covid_typography_repro.zip build.py manifest.json README_FINAL.txt .github_placeholder 2>/dev/null || true
+          rm -f output/dogdog_covid_typography_repro.zip
+          zip -9 output/dogdog_covid_typography_repro.zip build.py manifest.json README_FINAL.txt qc/final_validation.json qc/source_provenance.json qc/audio_source_ffprobe.json qc/typography_proof.jpg >/dev/null
+      - name: Upload finished reel
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dogdog-covid-typography-final
+          path: |
+            covid_lyrics_reel/output/dogdog_covid_typography_reel.mp4
+            covid_lyrics_reel/output/dogdog_covid_typography_repro.zip
+            covid_lyrics_reel/qc/final_validation.json
+            covid_lyrics_reel/qc/final_contact_sheet.jpg
+            covid_lyrics_reel/qc/typography_proof.jpg
+            covid_lyrics_reel/qc/source_provenance.json
+            covid_lyrics_reel/README_FINAL.txt
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

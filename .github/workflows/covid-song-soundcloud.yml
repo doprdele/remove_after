@@ -1,0 +1,36 @@
+name: covid-song-soundcloud
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-song-soundcloud.yml']
+permissions:
+  contents: read
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade 'yt-dlp[default]'
+      - name: Retrieve exact-title audio repost
+        run: |
+          mkdir -p audio
+          python -m yt_dlp --no-playlist --no-progress -f 'bestaudio/best' -x --audio-format wav -o 'audio/dogdog.%(ext)s' 'https://soundcloud.com/pika-lynx582/dogdog-abuse-ft-hatsune-miku'
+          ffprobe -v error -show_streams -show_format -of json audio/dogdog.wav > audio/ffprobe.json
+          python - <<'PY'
+          import json
+          p=json.load(open('audio/ffprobe.json'))
+          print('duration',p['format'].get('duration'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dogdog-full-audio
+          path: audio/
+          compression-level: 0
+          retention-days: 2

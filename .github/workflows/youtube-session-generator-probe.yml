@@ -1,0 +1,78 @@
+name: youtube-session-generator-probe
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/youtube-session-generator-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg jq curl
+          python -m pip install --upgrade 'yt-dlp[default]'
+      - name: Start trusted-session generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/imputnet/yt-session-generator:webserver
+          docker run -d --rm --name yt-session -p 8080:8080 ghcr.io/imputnet/yt-session-generator:webserver
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8080/token -o /tmp/session.json; then break; fi
+            sleep 2
+          done
+          test -s /tmp/session.json
+          jq 'keys' /tmp/session.json > session_keys.json
+          PO=$(jq -r '.po_token // .poToken // .pot // empty' /tmp/session.json)
+          VD=$(jq -r '.visitor_data // .visitorData // empty' /tmp/session.json)
+          test -n "$PO"; test -n "$VD"
+          echo "::add-mask::$PO"
+          echo "::add-mask::$VD"
+          printf '%s' "$PO" > /tmp/po_token
+          printf '%s' "$VD" > /tmp/visitor_data
+      - name: Test direct YouTube extraction
+        shell: bash
+        run: |
+          set +e
+          PO=$(cat /tmp/po_token); VD=$(cat /tmp/visitor_data)
+          ID=Cu2J8zRftJE
+          ARGS="youtube:player_client=web;player_skip=webpage,configs;visitor_data=${VD};po_token=web.gvs+${PO}"
+          python -m yt_dlp -v --no-playlist --socket-timeout 45 --retries 2 --extractor-args "$ARGS" --skip-download -F "https://www.youtube.com/watch?v=$ID" > format_test.log 2>&1
+          RC=$?
+          echo "$RC" > return_code.txt
+          if [ "$RC" = 0 ]; then
+            python -m yt_dlp --no-playlist --socket-timeout 45 --retries 2 --extractor-args "$ARGS" --download-sections '*0-5' --force-keyframes-at-cuts -f 'bestvideo[height>=1080]+bestaudio/best[height>=1080]/best' --merge-output-format mp4 -o 'youtube_direct_test.%(ext)s' "https://www.youtube.com/watch?v=$ID" >> format_test.log 2>&1
+            echo "$?" > media_return_code.txt
+          fi
+          rm -f /tmp/session.json /tmp/po_token /tmp/visitor_data
+          docker stop yt-session >/dev/null 2>&1 || true
+          exit 0
+      - name: Probe media if present
+        shell: bash
+        run: |
+          set +e
+          for f in youtube_direct_test.*; do
+            [ -s "$f" ] || continue
+            ffprobe -v error -show_streams -show_format -of json "$f" > media_probe.json
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-session-generator-probe
+          path: |
+            session_keys.json
+            return_code.txt
+            media_return_code.txt
+            media_probe.json
+            youtube_direct_test.*
+            format_test.log
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn

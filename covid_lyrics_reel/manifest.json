@@ -1,0 +1,13 @@
+{
+  "audio": "assets/dogdog.wav",
+  "overlay_opacity": 0.30,
+  "footage": {
+    "er": ["assets/er.mp4"],
+    "pyres": ["assets/pyres.mp4"],
+    "ventilator": ["assets/ventilator.mp4"]
+  },
+  "requested_song": "https://youtu.be/mGGjRtSZrMo",
+  "lyrics_mode": "English thematic paraphrases paced across the full song; no verbatim full translated lyrics",
+  "visual_system": "Exact upright/full-bleed 14-treatment motif from WANT TO BE CREMATED v2; no wobble, pitch, rotation, shear or perspective",
+  "source_note": "Direct YouTube acquisition was challenged on GitHub runner IPs; final background uses public 1920x1080 VOA/USAGM COVID report masters cropped cleanly to 1080x1920."
+}

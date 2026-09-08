@@ -1,0 +1,50 @@
+name: voa-1080-format-probe
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/voa-1080-format-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: python -m pip install --upgrade 'yt-dlp[default]' requests
+      - name: Probe formats and page media JSON
+        shell: bash
+        run: |
+          set +e
+          mkdir -p probe
+          urls=(
+            'https://ir.voanews.com/a/episode_iran-corona-covid-19-310511/6084657.html'
+            'https://www.voanews.com/a/episode_britain-lockdown-hospitals-overwhelmed-new-covid-outbreak-4539136/6114246.html'
+            'https://www.voanews.com/a/5880171.html'
+          )
+          i=0
+          for u in "${urls[@]}"; do
+            python -m yt_dlp -v --no-playlist -F "$u" > "probe/formats_$i.txt" 2>&1
+            python -m yt_dlp --no-playlist --dump-single-json --skip-download "$u" > "probe/info_$i.json" 2>"probe/info_$i.err"
+            curl -LfsS "$u" -o "probe/page_$i.html" || true
+            i=$((i+1))
+          done
+          python - <<'PY'
+          import json,re,glob
+          for f in glob.glob('probe/page_*.html'):
+            s=open(f,errors='ignore').read()
+            urls=[]
+            for m in re.finditer(r'https?[^"\\ ]+?\.mp4[^"\\ ]*',s):
+              u=m.group(0).replace('\\u0026','&').replace('\\/','/')
+              if u not in urls: urls.append(u)
+            open(f.replace('page_','mp4_urls_').replace('.html','.txt'),'w').write('\n'.join(urls))
+          PY
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voa-1080-format-probe
+          path: probe/
+          retention-days: 2

@@ -1,0 +1,158 @@
+name: covid-piped-review
+on:
+  push:
+    branches: [chatgpt-covid-lyrics-reel-20260907]
+    paths: ['.github/workflows/covid-piped-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade 'yt-dlp[default]' curl-cffi pillow
+      - name: Retrieve review proxies
+        run: |
+          cat > /tmp/piped.py <<'PY'
+          from pathlib import Path
+          from curl_cffi import requests
+          import json, subprocess as sp, sys, re, os
+          ROOT=Path('piped_review');ROOT.mkdir(exist_ok=True)
+          sess=requests.Session(impersonate='chrome')
+          IDS={
+            'song':['mGGjRtSZrMo'],
+            'er':['Cu2J8zRftJE','slO6Rf8vGzo','zRyWFj-lygc'],
+            'pyres':['vapEyLYgdDU','GwPE1vjpifs','1RKIVFMzAiY'],
+            'ventilator':['aBoaCHKJKd8','Xe-4p295SkY','ixVMVupntGQ','OSfLd05B_Sw']}
+          def instance_list():
+            urls=['https://piped-instances.kavin.rocks/','https://piped.video/api/v1/instances']
+            out=[]
+            for u in urls:
+              try:
+                r=sess.get(u,timeout=15)
+                data=r.json()
+                if isinstance(data,dict):data=data.get('instances') or data.get('data') or []
+                for x in data:
+                  if not isinstance(x,dict):continue
+                  api=x.get('api_url') or x.get('apiUrl') or x.get('api')
+                  if api and str(api).startswith('https://'):out.append(str(api).rstrip('/'))
+              except Exception:pass
+            preferred=['https://pipedapi.kavin.rocks','https://pipedapi.reallyaweso.me','https://pipedapi.adminforge.de','https://pipedapi.leptons.xyz','https://pipedapi-libre.kavin.rocks']
+            return list(dict.fromkeys(preferred+out))
+          INST=instance_list();(ROOT/'instances.json').write_text(json.dumps(INST,indent=2))
+          cache={}
+          def streams(vid):
+            if vid in cache:return cache[vid]
+            errs=[]
+            for base in INST[:45]:
+              try:
+                r=sess.get(base+'/streams/'+vid,timeout=7)
+                if r.status_code==200 and r.text.startswith('{'):
+                  d=r.json()
+                  if d.get('videoStreams') or d.get('audioStreams'):
+                    cache[vid]=(base,d);return cache[vid]
+                errs.append(base+':'+str(r.status_code))
+              except Exception as e:errs.append(base+':'+type(e).__name__)
+            raise RuntimeError('No Piped instance: '+','.join(errs[-18:]))
+          def download(url,path):
+            with sess.get(url,stream=True,timeout=60,allow_redirects=True) as r:
+              r.raise_for_status()
+              with open(path,'wb') as f:
+                for ch in r.iter_content(1024*1024):
+                  if ch:f.write(ch)
+          def qual(v):
+            m=re.search(r'(\d+)',str(v.get('quality') or v.get('qualityLabel') or '0'));return int(m.group(1)) if m else 0
+          def proxy_video(d):
+            vs=[v for v in d.get('videoStreams',[]) if v.get('url') and qual(v)<=720 and (v.get('format') or '').upper()!='HLS']
+            if not vs:vs=[v for v in d.get('videoStreams',[]) if v.get('url')]
+            return max(vs,key=lambda v:(qual(v),v.get('bitrate') or 0))
+          def audio(d):
+            a=[x for x in d.get('audioStreams',[]) if x.get('url')]
+            return max(a,key=lambda x:x.get('bitrate') or 0)
+          summary={}
+          for cat,ids in IDS.items():
+            for vid in ids:
+              ddir=ROOT/cat/vid;ddir.mkdir(parents=True,exist_ok=True)
+              try:
+                base,d=streams(vid)
+                (ddir/'metadata.json').write_text(json.dumps({k:d.get(k) for k in ['title','uploader','duration','description'] }|{'api':base},indent=2,ensure_ascii=False))
+                if cat=='song':
+                  try:
+                    download(audio(d)['url'],ddir/'audio.bin')
+                    sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(ddir/'audio.bin'),'-ar','48000','-ac','2',str(ddir/'song.wav')],check=True,timeout=180)
+                    (ddir/'audio.bin').unlink(missing_ok=True)
+                  except Exception as e:(ddir/'audio_error.log').write_text(str(e))
+                  try:download(proxy_video(d)['url'],ddir/'song_proxy.mp4')
+                  except Exception as e:(ddir/'proxy_error.log').write_text(str(e))
+                else:
+                  download(proxy_video(d)['url'],ddir/'proxy.mp4')
+                  probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(ddir/'proxy.mp4')]));dur=float(probe['format']['duration'])
+                  interval=max(dur/60,.8)
+                  vf=f'fps=1/{interval},scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text=%{{pts\\:hms}}:fontsize=15:fontcolor=white:box=1:boxcolor=black@0.8:x=3:y=3,tile=6x10:padding=2:margin=2'
+                  sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(ddir/'proxy.mp4'),'-vf',vf,'-frames:v','1',str(ddir/'contact.jpg')],check=True,timeout=120)
+                summary[vid]={'ok':True,'api':base,'title':d.get('title'),'duration':d.get('duration')}
+              except Exception as e:
+                (ddir/'error.log').write_text(type(e).__name__+': '+str(e));summary[vid]={'ok':False,'error':str(e)}
+          # Fallback same-song mirror. Save both audio and proxy if Piped did not provide them.
+          s=ROOT/'song'/'mGGjRtSZrMo';s.mkdir(parents=True,exist_ok=True)
+          if not (s/'song.wav').exists():
+            url='https://www.bilibili.com/video/BV1Px411o7ku'
+            cmd=[sys.executable,'-m','yt_dlp','--no-progress','--no-playlist','--js-runtimes','node','--remote-components','ejs:github','-f','bestaudio/best','-x','--audio-format','wav','-o',str(s/'song.%(ext)s'),url]
+            rr=sp.run(cmd,stdout=sp.PIPE,stderr=sp.STDOUT,text=True,timeout=300);(s/'bilibili_audio.log').write_text(rr.stdout)
+            if not (s/'song_proxy.mp4').exists():
+              rr=sp.run([sys.executable,'-m','yt_dlp','--no-progress','--no-playlist','-f','best[height<=480]/best','-o',str(s/'song_proxy.%(ext)s'),url],stdout=sp.PIPE,stderr=sp.STDOUT,text=True,timeout=300);(s/'bilibili_proxy.log').write_text(rr.stdout)
+          # Detect subtitle/lyric screen-change times from proxy by frame histogram differences, independent of language OCR.
+          proxy=next((p for p in s.glob('song_proxy.*') if p.suffix in ('.mp4','.webm','.mkv')),None)
+          if proxy:
+            sp.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',str(proxy),'-vf','fps=4,scale=640:-2,format=gray','-f','rawvideo',str(s/'gray.raw')],check=True,timeout=240)
+            import numpy as np
+            probe=json.loads(sp.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(proxy)]));v=next(x for x in probe['streams'] if x['codec_type']=='video');w=640;h=round(int(v['height'])*640/int(v['width']));h+=h%2
+            raw=np.fromfile(s/'gray.raw',dtype=np.uint8);count=len(raw)//(w*h);raw=raw[:count*w*h].reshape(count,h,w);(s/'gray.raw').unlink(missing_ok=True)
+            changes=[];prev=None
+            for i,im in enumerate(raw):
+              # Center/bottom region where lyric text changes dominate; ignore global animation with thresholded edges.
+              roi=im[int(h*.18):int(h*.88)]
+              edge=np.abs(np.diff(roi.astype(np.int16),axis=1)).mean(axis=0)
+              sig=(edge>12).astype(np.uint8)
+              if prev is not None:
+                score=np.mean(sig!=prev)
+                if score>.13 and (not changes or i/4-changes[-1]['t']>.45):changes.append({'t':round(i/4,2),'score':round(float(score),3)})
+              prev=sig
+            (s/'lyric_screen_changes.json').write_text(json.dumps(changes,indent=2))
+          (ROOT/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False))
+          print(json.dumps(summary,indent=2))
+          PY
+          python -u /tmp/piped.py
+      - name: Upload review sheets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-piped-review
+          path: |
+            piped_review/**/*.json
+            piped_review/**/*.jpg
+            piped_review/**/*.log
+          retention-days: 2
+      - name: Upload song media
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covid-piped-song
+          path: |
+            piped_review/song/**/*.wav
+            piped_review/song/**/song_proxy.mp4
+            piped_review/song/**/song_proxy.webm
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: warn
